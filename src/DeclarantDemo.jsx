@@ -5,6 +5,31 @@ import { dirOf } from "./lang.js";
 import { mad, fmt, fmtInt } from "../shared/format.js";
 import { INVOICES } from "../data/invoices.js";
 import { TARIFF_NOTE } from "../shared/tariff.js";
+import { enrichDeclaration } from "../shared/enrich.js";
+import { historyFor } from "../data/history.js";
+
+/* Re-run the SAME deterministic engine in the browser with a manual HS override
+   — instant, offline-proof. Raw line fields survive on the enriched decl, so we
+   reconstruct the extracted payload from it and let enrich recompute everything. */
+function recompute(decl, hsOverrides) {
+  const extracted = {
+    header: decl.header,
+    lines: (decl.lines || []).map((l) => ({
+      raw_description: l.raw_description || l.description,
+      quantity: l.quantity, unit: l.unit, unit_price: l.unit_price,
+      line_total: l.line_total, declared_origin: l.declared_origin,
+      gross_weight_kg: l.gross_weight_kg,
+    })),
+  };
+  return enrichDeclaration(extracted, {
+    coo_present: decl.coo_present,
+    origin_country: decl.origin_country,
+    importer_known: decl.importer_known,
+    source: decl.source,
+    hsOverrides,
+    historyFor,
+  });
+}
 
 const STEPS = [
   "Lecture de la facture",
@@ -123,7 +148,20 @@ function Reception({ onPick, error }) {
 }
 
 /* ------------------------------- résultat ------------------------------- */
-function Result({ decl, onBack }) {
+function Result({ decl: initialDecl, onBack }) {
+  const [decl, setDecl] = useState(initialDecl);
+  const [overrides, setOverrides] = useState({});
+  const [openLine, setOpenLine] = useState(null);
+  useEffect(() => { setDecl(initialDecl); setOverrides({}); setOpenLine(null); }, [initialDecl]);
+
+  function reclassify(idx, code) {
+    const next = { ...overrides };
+    if (code == null) delete next[idx]; else next[idx] = code;
+    setOverrides(next);
+    setDecl(recompute(initialDecl, next));
+    setOpenLine(null);
+  }
+
   const totals = decl.totals;
   const header = decl.header || {};
   const seller = header.seller || {};
@@ -134,11 +172,11 @@ function Result({ decl, onBack }) {
     setStep(-1); let s = -1;
     const tmr = setInterval(() => { s += 1; setStep(s); if (s >= 5) clearInterval(tmr); }, 240);
     return () => clearInterval(tmr);
-  }, [decl]);
+  }, [initialDecl]);
   const shown = (n) => step >= n;
   const landedAnim = useCountUp(totals.landed_cost_mad, shown(2));
 
-  const numero = useMemo(() => "DUM-2026-" + String(1000 + Math.floor((totals.landed_cost_mad % 9000))).padStart(5, "0"), [decl]);
+  const numero = useMemo(() => "DUM-2026-" + String(1000 + Math.floor((initialDecl.totals.landed_cost_mad % 9000))).padStart(5, "0"), [initialDecl]);
   const histConfirm = (decl.lines || []).filter((l) => l.history && (l.history.status === "consistent" || l.history.status === "high"));
 
   return (
@@ -198,20 +236,29 @@ function Result({ decl, onBack }) {
             <tbody>
               {decl.lines.map((l, i) => {
                 const low = (l.confidence || 0) < 0.5;
+                const isOpen = openLine === i;
+                const pct = Math.round((l.confidence || 0) * 100);
                 return (
-                  <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                  <React.Fragment key={i}>
+                  <tr style={{ borderTop: `1px solid ${C.border}`, background: isOpen ? C.tint1 : "transparent" }}>
                     <td style={{ padding: "11px 12px", maxWidth: 280 }}>
                       <div dir={dirOf(l.description)} style={{ fontSize: 13, color: C.ink, fontWeight: 500, lineHeight: 1.35 }}>{l.description}</div>
                       <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtInt(l.quantity)} {l.unit} · {l.hs_label_fr}</div>
                     </td>
                     <td style={{ padding: "11px 12px" }}>
-                      <Mono style={{ fontSize: 12.5, color: C.navy }}>{l.hs_code}</Mono>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Mono style={{ fontSize: 12.5, color: C.navy }}>{l.hs_code}</Mono>
+                        {l.manual_hs && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>manuel</span>}
+                      </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3 }}>
                         <span style={{ width: 30, height: 4, borderRadius: 3, background: C.tint2, overflow: "hidden", display: "inline-block" }}>
-                          <span style={{ display: "block", height: "100%", width: `${Math.round((l.confidence || 0) * 100)}%`, background: low ? "#C98A2B" : "#3F7A4E" }} />
+                          <span style={{ display: "block", height: "100%", width: `${pct}%`, background: l.manual_hs ? C.navy : low ? "#C98A2B" : "#3F7A4E" }} />
                         </span>
-                        <span style={{ fontSize: 10, color: low ? "#8A5A12" : C.muted }}>{Math.round((l.confidence || 0) * 100)}%{low ? " · à vérifier" : ""}</span>
+                        <span style={{ fontSize: 10, color: low && !l.manual_hs ? "#8A5A12" : C.muted }}>{l.manual_hs ? "validé" : pct + "%" + (low ? " · à vérifier" : "")}</span>
                       </div>
+                      <button onClick={() => setOpenLine(isOpen ? null : i)} style={{ marginTop: 5, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontSize: 10.5, color: C.navy, fontFamily: "var(--sans)" }}>
+                        {isOpen ? "▾ " : "▸ "}pourquoi / modifier{l.alternates && l.alternates.length ? ` (${l.alternates.length})` : ""}
+                      </button>
                     </td>
                     <td style={{ textAlign: "end", padding: "11px 12px" }}><Mono style={{ fontSize: 12, color: C.ink2 }}>{fmt(l.cif_mad)}</Mono></td>
                     <td style={{ textAlign: "end", padding: "11px 12px" }}>
@@ -221,6 +268,14 @@ function Result({ decl, onBack }) {
                     <td style={{ textAlign: "end", padding: "11px 12px" }}><Mono style={{ fontSize: 12, color: C.ink2 }}>{fmt(l.vat_mad)}</Mono></td>
                     <td style={{ textAlign: "end", padding: "11px 12px" }}><Mono style={{ fontSize: 12.5, color: C.ink, fontWeight: 600 }}>{fmt(l.landed_cost_mad)}</Mono></td>
                   </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={6} style={{ background: C.page, padding: "13px 14px", borderTop: `1px solid ${C.border}` }}>
+                        <HsExplain line={l} onPick={(code) => reclassify(i, code)} onReset={l.manual_hs ? () => reclassify(i, null) : null} />
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -283,6 +338,49 @@ function Result({ decl, onBack }) {
       <div style={{ opacity: shown(4) ? 1 : 0, transform: shown(4) ? "none" : "translateY(12px)", transition: "opacity .55s ease, transform .55s ease", marginTop: 20 }}>
         <DumDocument decl={decl} numero={numero} />
       </div>
+    </div>
+  );
+}
+
+/* ------------------- HS explainability + manual override ---------------- */
+function HsExplain({ line, onPick, onReset }) {
+  const alts = line.alternates || [];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 12, color: C.ink2 }}>
+        <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.faint }}>Pourquoi ce code</span>
+        <div style={{ marginTop: 3, lineHeight: 1.5 }}>
+          {line.classification_reason || "—"}
+          {line.priceBand ? ` · valeur attendue ${line.priceBand[0]}–${line.priceBand[1]} MAD/u` : ""}
+        </div>
+      </div>
+      {alts.length > 0 && (
+        <div>
+          <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.faint, marginBottom: 6 }}>
+            Autres codes possibles — cliquez pour reclasser
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {alts.map((a) => (
+              <button key={a.code} onClick={() => onPick(a.code)} style={{
+                textAlign: "start", border: `1px solid ${C.border2}`, background: C.paper,
+                borderRadius: 7, padding: "8px 11px", cursor: "pointer", maxWidth: 260,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <Mono style={{ fontSize: 12, color: C.navy, fontWeight: 600 }}>{a.code}</Mono>
+                  <span style={{ fontSize: 10.5, color: C.ink2 }}>droit {a.duty} %</span>
+                </div>
+                <div dir={dirOf(a.fr)} style={{ fontSize: 11.5, color: C.muted, marginTop: 2, lineHeight: 1.35 }}>{a.fr}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {onReset && (
+        <button onClick={onReset} style={{ alignSelf: "flex-start", border: "none", background: "transparent", padding: 0, cursor: "pointer", fontSize: 11, color: C.navy, fontFamily: "var(--sans)" }}>
+          ↺ rétablir la suggestion automatique
+        </button>
+      )}
+      <DemoNote>Même moteur que le serveur — valeur en douane, droits et circuit recalculés instantanément.</DemoNote>
     </div>
   );
 }

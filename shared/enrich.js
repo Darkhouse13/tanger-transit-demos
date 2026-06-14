@@ -9,21 +9,29 @@
 import { resolveHs } from "./classify.js";
 import { computeLanded } from "./landed.js";
 import { assessRisk } from "./risk.js";
+import { TARIFF_BY_CODE } from "./tariff.js";
 
 export function enrichDeclaration(extracted, meta = {}) {
   const header = extracted.header || {};
   const currency = header.currency || "MAD";
   const incoterm = header.incoterm || "";
+  const overrides = meta.hsOverrides || {}; // { lineIndex: hsCode } — manual reclassification
 
-  /* 1 — classify each line and attach the resolved tariff rates */
-  const classified = (extracted.lines || []).map((ln) => {
+  /* 1 — classify each line and attach the resolved tariff rates.
+     A manual override (declarant picks another code) wins over the suggestion;
+     the rest of the pipeline — landed cost, risk — recomputes from it unchanged. */
+  const classified = (extracted.lines || []).map((ln, idx) => {
     const desc = ln.raw_description || ln.description || "";
     const res = resolveHs(desc);
-    const best = res.best || {};
+    const cands = [res.best, ...(res.alternates || [])].filter(Boolean);
+    const ovCode = overrides[idx];
+    const manual = !!(ovCode && TARIFF_BY_CODE[ovCode]);
+    const best = manual ? TARIFF_BY_CODE[ovCode] : (res.best || {});
+    const code = best.code || null;
     return {
       ...ln,
       description: desc,
-      hs_code: best.code || null,
+      hs_code: code,
       hs_label_fr: best.fr || null,
       hs_label_ar: best.ar || null,
       hs_label_en: best.en || null,
@@ -33,10 +41,11 @@ export function enrichDeclaration(extracted, meta = {}) {
       tpi: best.tpi != null ? best.tpi : 0.25,
       sensitive: !!best.sensitive,
       priceBand: best.priceBand || null,
-      confidence: res.confidence,
-      needs_review: res.needsReview,
-      classification_reason: res.reason,
-      alternates: res.alternates || [],
+      confidence: manual ? 1 : res.confidence,
+      needs_review: manual ? false : res.needsReview,
+      classification_reason: manual ? "classement validé manuellement" : res.reason,
+      manual_hs: manual,
+      alternates: cands.filter((c) => c.code !== code),
     };
   });
 
@@ -95,6 +104,7 @@ export function enrichDeclaration(extracted, meta = {}) {
     risk,
     coo_present,
     origin_country,
+    importer_known, // surfaced so a client-side recompute keeps the same circuit basis
     documents_present: header.documents_present || [],
     source: meta.source || "live",
     note: "Données illustratives — démonstration (l'IA structure, le code calcule).",
