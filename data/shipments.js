@@ -23,7 +23,8 @@ export const SHIPMENTS = [
   { id: "s3", ref: "DUM-2026-00153", importer: "Atlas Mobile Distribution", supplier: "Shenzhen Sourcing", origin: "CN",
     goods: "Téléphones mobiles (smartphones)", hsCode: "8517120000", mode: "air", circuit: "rouge", status: "inspection",
     eta: "2026-06-11", arrivedAt: "2026-06-11", freeTimeDays: 3, freeTimeEndsAt: "2026-06-14",
-    dailySurestarie: 1200, declaredValueMad: 219000, riskFlags: ["Valeur sous-évaluée — visite physique en cours"] },
+    dailySurestarie: 1200, declaredValueMad: 219000, riskFlags: ["Valeur sous-évaluée — visite physique en cours"],
+    undervaluation: { gap_mad: 6181100, eluded_mad: 1440196 } },
 
   { id: "s4", ref: "DUM-2026-00155", importer: "Rif Bâti Distribution", supplier: "Valencia Cerámica", origin: "ES",
     goods: "Carreaux en céramique émaillée", hsCode: "6907210000", mode: "mer", circuit: "rouge", status: "sous_douane",
@@ -88,6 +89,7 @@ export const REKEY_MIN_PER_DUM = 35;
 export function computeBoardKpis(shipments, refISO = REF_DATE) {
   const sur = (s) => s.surestarie || surestarieFor(s, refISO);
   const atRisk = shipments.filter((s) => ["overdue", "soon"].includes(sur(s).state));
+  const undervalued = shipments.filter((s) => s.undervaluation && s.undervaluation.eluded_mad > 0);
   return {
     total: shipments.length,
     vert: shipments.filter((s) => s.circuit === "vert").length,
@@ -100,6 +102,10 @@ export function computeBoardKpis(shipments, refISO = REF_DATE) {
     dailyExposureMad: atRisk.reduce((acc, s) => acc + (s.dailySurestarie || 0), 0),
     /* productivity story: re-keying hours the pre-fill removes */
     rekeyHoursSaved: Math.round((shipments.length * REKEY_MIN_PER_DUM) / 60),
+    /* enforcement story: under-declared duty+tax flagged vs importer history */
+    undervaluationCount: undervalued.length,
+    undervaluationMad: undervalued.reduce((a, s) => a + (s.undervaluation.eluded_mad || 0), 0),
+    undervaluationGapMad: undervalued.reduce((a, s) => a + (s.undervaluation.gap_mad || 0), 0),
   };
 }
 

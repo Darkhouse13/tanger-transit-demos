@@ -51,6 +51,7 @@ export function dossierFromDecl(decl) {
     dailySurestarie: 700,
     declaredValueMad: Math.round(decl.totals.goods_value_mad || decl.totals.cif_mad || 0),
     riskFlags: (decl.risk.flags || []).map((f) => f.message),
+    undervaluation: decl.undervaluation || null,
     tracked: true,
   };
 }

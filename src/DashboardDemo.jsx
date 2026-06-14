@@ -132,6 +132,15 @@ function SavingsBanner({ kpis }) {
           {fmtInt(atRisk)} dossier(s) à risque (franchise dépassée ou imminente)
         </div>
       </div>
+      {kpis.undervaluationMad > 0 && (
+        <div style={{ flex: "1 1 280px", display: "flex", alignItems: "center", gap: 13, background: "#F2DAD5", borderRadius: 8, padding: "14px 18px", border: "1px solid #E0B3A8" }}>
+          <Mono style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em", color: "#7A2E22" }}>{fmtInt(kpis.undervaluationMad)} <span style={{ fontSize: 14 }}>MAD</span></Mono>
+          <div style={{ fontSize: 12.5, lineHeight: 1.4, color: C.ink2 }}>
+            de <span style={{ fontWeight: 500 }}>droits & taxes sous-déclarés</span> détectés<br />
+            {fmtInt(kpis.undervaluationCount)} dossier(s) — valeur vs historique importateur
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -195,6 +204,11 @@ function Timeline({ shipment, sur }) {
       {sur.state === "overdue" && (
         <div style={{ marginTop: 10, fontSize: 12, color: "#7A2E22", fontWeight: 500 }}>
           ⚠ Surestaries en cours : {sur.overdueDays} jour(s) × {fmtInt(shipment.dailySurestarie)} MAD = {fmtInt(sur.amount)} MAD
+        </div>
+      )}
+      {shipment.undervaluation && shipment.undervaluation.eluded_mad > 0 && (
+        <div style={{ marginTop: 10, fontSize: 12, color: "#7A2E22", fontWeight: 500 }}>
+          ⚠ Sous-déclaration vs historique : écart ~{fmtInt(shipment.undervaluation.gap_mad)} MAD · droits & taxes éludés ~{fmtInt(shipment.undervaluation.eluded_mad)} MAD
         </div>
       )}
     </div>
