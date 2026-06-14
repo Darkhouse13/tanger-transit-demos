@@ -61,7 +61,7 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 1120, margin: "0 auto", padding: "28px 22px 48px" }}>
-        {tab === "declarant" && <DeclarantDemo />}
+        {tab === "declarant" && <DeclarantDemo onNavigate={setTab} />}
         {tab === "calc" && <CalculatorDemo />}
         {tab === "board" && <DashboardDemo />}
       </main>

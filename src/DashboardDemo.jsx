@@ -4,6 +4,7 @@ import { Eyebrow, Mono, CircuitChip, useCountUp, DemoNote } from "./ui.jsx";
 import { dirOf } from "./lang.js";
 import { fmtInt, fmt } from "../shared/format.js";
 import { SHIPMENTS, surestarieFor, REF_DATE, TIMELINE, computeBoardKpis } from "../data/shipments.js";
+import { getTracked, subscribeTracked } from "./trackedStore.js";
 
 const STATUS_LABEL = {
   en_route: "En route", arrivé: "Arrivé au port", sous_douane: "Sous douane",
@@ -15,6 +16,9 @@ const MODE_LABEL = { mer: "Maritime", air: "Aérien", route: "Route" };
 export function DashboardDemo() {
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(null);
+  const [tracked, setTracked] = useState(getTracked());
+
+  useEffect(() => subscribeTracked(setTracked), []);
 
   useEffect(() => {
     let alive = true;
@@ -29,7 +33,11 @@ export function DashboardDemo() {
   }, []);
 
   if (!data) return <div style={{ padding: "60px 0", textAlign: "center", color: C.faint, fontSize: 13 }}>Chargement du tableau de bord…</div>;
-  const { kpis, shipments } = data;
+  /* Merge dossiers tracked from the Déclarant (newest first) with the board;
+     KPIs + savings banner recompute over the combined list. */
+  const trackedShip = tracked.map((s) => ({ ...s, surestarie: surestarieFor(s) }));
+  const shipments = [...trackedShip, ...data.shipments];
+  const kpis = computeBoardKpis(shipments);
 
   return (
     <div style={{ animation: "coursFade .4s ease" }}>
@@ -72,7 +80,10 @@ export function DashboardDemo() {
                   <React.Fragment key={s.id}>
                     <tr onClick={() => setOpen(isOpen ? null : s.id)} style={{ borderTop: `1px solid ${C.border}`, cursor: "pointer", background: isOpen ? C.tint1 : "transparent" }}>
                       <td style={{ padding: "11px 14px" }}>
-                        <Mono style={{ fontSize: 12.5, color: C.navy, fontWeight: 500 }}>{s.ref}</Mono>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Mono style={{ fontSize: 12.5, color: C.navy, fontWeight: 500 }}>{s.ref}</Mono>
+                          {s.tracked && <span style={{ fontSize: 9, fontWeight: 600, color: "#2F5A43", background: "#DCE5DD", borderRadius: 4, padding: "1px 5px", letterSpacing: "0.03em" }}>NOUVEAU</span>}
+                        </div>
                         <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2 }}>{s.hsCode}</div>
                       </td>
                       <td style={{ padding: "11px 14px", fontSize: 12.5, color: C.ink, fontWeight: 500 }} dir={dirOf(s.importer)}>{s.importer}</td>

@@ -7,6 +7,7 @@ import { INVOICES } from "../data/invoices.js";
 import { TARIFF_NOTE } from "../shared/tariff.js";
 import { enrichDeclaration } from "../shared/enrich.js";
 import { historyFor } from "../data/history.js";
+import { addTracked, dossierFromDecl } from "./trackedStore.js";
 
 /* Re-run the SAME deterministic engine in the browser with a manual HS override
    — instant, offline-proof. Raw line fields survive on the enriched decl, so we
@@ -51,7 +52,7 @@ const SEV_STYLE = {
   low: { fg: "#3A3D40", bg: "#ECE7DC" },
 };
 
-export function DeclarantDemo() {
+export function DeclarantDemo({ onNavigate }) {
   const [view, setView] = useState("reception");
   const [decl, setDecl] = useState(null);
   const [source, setSource] = useState(null);
@@ -82,7 +83,7 @@ export function DeclarantDemo() {
   }
 
   if (view === "analyzing") return <Analyzing steps={STEPS} source={source} text={rawText} title="Lecture de la facture" note="L'IA structure la facture — codes SH, droits, TVA et risque sont calculés par du code déterministe." />;
-  if (view === "result" && decl) return <Result decl={decl} onBack={() => setView("reception")} />;
+  if (view === "result" && decl) return <Result decl={decl} onBack={() => setView("reception")} onNavigate={onNavigate} />;
   return <Reception onPick={run} error={error} />;
 }
 
@@ -148,7 +149,7 @@ function Reception({ onPick, error }) {
 }
 
 /* ------------------------------- résultat ------------------------------- */
-function Result({ decl: initialDecl, onBack }) {
+function Result({ decl: initialDecl, onBack, onNavigate }) {
   const [decl, setDecl] = useState(initialDecl);
   const [overrides, setOverrides] = useState({});
   const [openLine, setOpenLine] = useState(null);
@@ -191,8 +192,9 @@ function Result({ decl: initialDecl, onBack }) {
             {seller.name ? `${seller.name} → ` : ""}{buyer.city || "Maroc"} · facture {header.invoice_no || "—"} · {decl.currency}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <CircuitChip circuit={decl.risk.circuit} big />
+          <Btn onClick={() => { addTracked(dossierFromDecl(decl)); if (onNavigate) onNavigate("board"); }}>Suivre ce dossier ↗</Btn>
           <Btn variant="ghost" onClick={onBack}>← Autre facture</Btn>
         </div>
       </div>
