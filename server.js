@@ -11,7 +11,8 @@ import { enrichDeclaration } from "./shared/enrich.js";
 import { rankHs } from "./shared/classify.js";
 import { computeLanded } from "./shared/landed.js";
 import { matchInvoice } from "./data/invoices.js";
-import { SHIPMENTS, surestarieFor, REF_DATE } from "./data/shipments.js";
+import { historyFor } from "./data/history.js";
+import { SHIPMENTS, surestarieFor, REF_DATE, computeBoardKpis } from "./data/shipments.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,7 +82,7 @@ app.post(
         extracted = await callDeepSeek(EXTRACT_SYSTEM_PROMPT, invoiceText, { maxTokens: 1500 });
         meta = { source: "live" };
       }
-      reply.send(enrichDeclaration(extracted, meta));
+      reply.send(enrichDeclaration(extracted, { ...meta, historyFor }));
     } catch {
       reply.code(502).send({ error: "Le service d'extraction est indisponible." });
     }
@@ -141,15 +142,7 @@ app.get(
   { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
   async (_request, reply) => {
     const shipments = SHIPMENTS.map((s) => ({ ...s, surestarie: surestarieFor(s) }));
-    const kpis = {
-      total: shipments.length,
-      vert: shipments.filter((s) => s.circuit === "vert").length,
-      orange: shipments.filter((s) => s.circuit === "orange").length,
-      rouge: shipments.filter((s) => s.circuit === "rouge").length,
-      surestarieMad: shipments.reduce((sum, s) => sum + (s.surestarie.amount || 0), 0),
-      surestarieCount: shipments.filter((s) => s.surestarie.state === "overdue").length,
-    };
-    reply.send({ ref_date: REF_DATE, kpis, shipments });
+    reply.send({ ref_date: REF_DATE, kpis: computeBoardKpis(shipments), shipments });
   }
 );
 

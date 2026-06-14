@@ -79,6 +79,30 @@ export function surestarieFor(s, refISO = REF_DATE) {
   return { state: delta <= 1 ? "soon" : "ok", daysLeft: delta, overdueDays: 0, amount: 0 };
 }
 
+/* Assumed manual keying time saved per pre-filled DUM (BADR re-entry by hand).
+   Conservative — a full DUM is typically 30–45 min of manual capture. */
+export const REKEY_MIN_PER_DUM = 35;
+
+/* Board KPIs — single source of truth, shared by the server and the client.
+   Pure rollup over shipments (each may carry a precomputed `.surestarie`). */
+export function computeBoardKpis(shipments, refISO = REF_DATE) {
+  const sur = (s) => s.surestarie || surestarieFor(s, refISO);
+  const atRisk = shipments.filter((s) => ["overdue", "soon"].includes(sur(s).state));
+  return {
+    total: shipments.length,
+    vert: shipments.filter((s) => s.circuit === "vert").length,
+    orange: shipments.filter((s) => s.circuit === "orange").length,
+    rouge: shipments.filter((s) => s.circuit === "rouge").length,
+    surestarieMad: shipments.reduce((acc, s) => acc + (sur(s).amount || 0), 0),
+    surestarieCount: shipments.filter((s) => sur(s).state === "overdue").length,
+    /* money story: dossiers bleeding (or about to) and the daily exposure if untouched */
+    atRiskCount: atRisk.length,
+    dailyExposureMad: atRisk.reduce((acc, s) => acc + (s.dailySurestarie || 0), 0),
+    /* productivity story: re-keying hours the pre-fill removes */
+    rekeyHoursSaved: Math.round((shipments.length * REKEY_MIN_PER_DUM) / 60),
+  };
+}
+
 export const STATUS_STEPS = ["en_route", "arrivé", "sous_douane", "inspection", "dédouané", "livré"];
 /* The canonical clearance timeline (inspection only shown on rouge). */
 export const TIMELINE = [

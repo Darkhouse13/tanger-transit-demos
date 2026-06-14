@@ -208,6 +208,56 @@ Origine: UE. Documents: facture, colisage, BL, certificat d'origine.`,
     },
     meta: { origin_country: "ES", coo_present: true, importer_known: true, expected_circuit: "orange" },
   },
+
+  /* ---------- 6. Messy / scanned forwarded e-mail -> VERT (robust extraction) ---------- */
+  {
+    id: "inv6",
+    sender: "Détroit Auto Maroc",
+    email: "achats@detroit-auto.ma",
+    date: "Aujourd'hui · 07:48",
+    subject: "Fwd: scan facture Garonne (qualité moyenne) — roulements + pneus",
+    snippet: "E-mail transféré + scan OCR : colonnes cassées, accents perdus… extraction quand même propre…",
+    body:
+`---------- Message transféré ----------
+De: achats@detroit-auto.ma
+Objet: Fwd: scan facture fournisseur (à dédouaner svp)
+
+bonjour, voici le scan recu ce matin, qualite moyenne (numerise au tel).
+merci de preparer la declaration. cdlt.
+
+[Numerise par l'app mobile - page 1/1]
+
+FACTURE  COMMERC1ALE / COMMERCIAL  INV0ICE
+Garonne  Components  SAS    -    Merignac (33) , France
+Facture  n  FR-2026-0510      date  10 / 06 / 2026
+vendu a :  Detroit Auto Maroc Sarl , Z . I . Gzenaya , Tanger  ( MA )
+
+Incoterm .. FOB  Le Havre        devise ..  EUR
+fret  maritime : 980,00      assurance : 120 ,00
+
+ref      designation                                 qte      pu(eur)    montant
+RL-882   Roulements  a  billes  (rlt 6204)           1500       9,00     13 500,00
+PN-330   Pneumatiques   neufs   p .  voiture         400       28,00     11 200,00
+                                                              total ht   24 700,00
+
+origine : France .  docs joints : facture , colisage , BL , certif . origine EUR.1
+* fin du document numerise *`,
+    extracted: {
+      header: {
+        seller: { name: "Garonne Components SAS", country: "FR" },
+        buyer: { name: "Détroit Auto Maroc SARL", city: "Tanger", country: "MA" },
+        invoice_no: "FR-2026-0510", invoice_date: "2026-06-10",
+        incoterm: "FOB", incoterm_place: "Le Havre", currency: "EUR",
+        freight_amount: 980, insurance_amount: 120,
+        documents_present: ["facture", "colisage", "bl", "certificat_origine"],
+      },
+      lines: [
+        { raw_description: "Roulements à billes (réf. 6204)", quantity: 1500, unit: "piece", unit_price: 9, line_total: 13500, declared_origin: "FR", gross_weight_kg: 750 },
+        { raw_description: "Pneumatiques neufs pour voiture", quantity: 400, unit: "piece", unit_price: 28, line_total: 11200, declared_origin: "FR", gross_weight_kg: 3200 },
+      ],
+    },
+    meta: { origin_country: "FR", coo_present: true, importer_known: true, expected_circuit: "vert" },
+  },
 ];
 
 /* Match pasted/incoming text back to a sample (offline extraction fallback). */

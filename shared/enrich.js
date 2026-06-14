@@ -48,6 +48,32 @@ export function enrichDeclaration(extracted, meta = {}) {
     insurance: header.insurance_amount || 0,
   });
 
+  /* 2b — attach the importer's own price history to each line (optional;
+     injected by the caller so the engine stays decoupled from demo data).
+     Lets the risk scorer flag undervaluation against THIS importer's
+     baseline, not just a generic tariff band. NO numbers from the LLM. */
+  const historyLookup = typeof meta.historyFor === "function" ? meta.historyFor : null;
+  const importer = (header.buyer && header.buyer.name) || meta.importer || null;
+  const withHistory = lines.map((ln) => {
+    if (!historyLookup || !ln.hs_code || !(ln.unit_price_mad > 0)) return ln;
+    const h = historyLookup(importer, ln.hs_code);
+    if (!h || !(h.unit_mad > 0)) return ln;
+    const ratio = ln.unit_price_mad / h.unit_mad;
+    const status = ratio < 0.6 ? "low" : ratio < 0.85 ? "soft_low" : ratio > 1.6 ? "high" : "consistent";
+    return {
+      ...ln,
+      history: {
+        importer,
+        baseline_mad: h.unit_mad,
+        samples: h.samples,
+        ratio: Math.round(ratio * 1000) / 1000,
+        status,
+        last_red_ref: h.last_red_ref || null,
+        last_red_when: h.last_red_when || null,
+      },
+    };
+  });
+
   /* 3 — risk circuit */
   const coo_present = meta.coo_present != null
     ? meta.coo_present
@@ -58,13 +84,13 @@ export function enrichDeclaration(extracted, meta = {}) {
     || null;
   const importer_known = meta.importer_known; // undefined in live mode = neutral
 
-  const risk = assessRisk({ lines, origin_country, coo_present, importer_known });
+  const risk = assessRisk({ lines: withHistory, origin_country, coo_present, importer_known });
 
   return {
     header,
     currency,
     incoterm,
-    lines,
+    lines: withHistory,
     totals,
     risk,
     coo_present,

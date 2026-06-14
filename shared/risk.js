@@ -20,7 +20,7 @@ const PREFERENTIAL = new Set([
 const SEV = { high: 3, medium: 2, low: 1 };
 
 /* flags whose presence forces at least a Rouge circuit regardless of total score */
-const RED_FORCING = new Set(["UNDERVALUE", "NO_COO", "NO_VALUE", "LOW_CONF"]);
+const RED_FORCING = new Set(["UNDERVALUE", "HIST_UNDERVALUE", "NO_COO", "NO_VALUE", "LOW_CONF"]);
 
 export function assessRisk(decl) {
   const lines = decl.lines || [];
@@ -39,17 +39,35 @@ export function assessRisk(decl) {
         add(12, "medium", "MED_CONF", `Classement à vérifier : « ${desc} » (confiance ${Math.round(ln.confidence * 100)} %)`);
     }
 
-    /* L2 — declared unit price vs expected band (undervaluation) */
-    const band = ln.priceBand;
+    /* L2 — declared unit price vs expected value.
+       Prefer the importer's OWN history when available (far more telling than
+       a generic band); otherwise fall back to the tariff price band. */
     const up = ln.unit_price_mad;
-    if (band && up != null && up > 0) {
-      const [lo, hi] = band;
-      if (up < 0.5 * lo)
-        add(30, "high", "UNDERVALUE", `Valeur anormalement basse : ${Math.round(up)} MAD/u vs ${lo}–${hi} attendu (« ${desc} »)`);
-      else if (up < 0.8 * lo)
-        add(15, "medium", "LOW_VALUE", `Valeur basse : ${Math.round(up)} MAD/u vs ${lo}–${hi} attendu (« ${desc} »)`);
-      else if (up > 1.5 * hi)
-        add(10, "medium", "HIGH_VALUE", `Valeur élevée — vérifier la facture (« ${desc} »)`);
+    const h = ln.history;
+    if (h && up != null && up > 0) {
+      const base = Math.round(h.baseline_mad);
+      const pct = Math.round((up / h.baseline_mad - 1) * 100);
+      if (h.status === "low") {
+        const redNote = h.last_red_ref
+          ? ` — profil déjà passé en rouge (${h.last_red_ref}${h.last_red_when ? ", " + h.last_red_when : ""})`
+          : "";
+        add(32, "high", "HIST_UNDERVALUE",
+          `Sous-évaluation vs historique : ${h.importer} déclare ce produit à ~${base} MAD/u (${h.samples} dossiers) ; ici ${Math.round(up)} MAD/u (${pct} %)${redNote}`);
+      } else if (h.status === "soft_low") {
+        add(16, "medium", "HIST_LOW",
+          `Valeur sous l'historique de l'importateur : ~${base} MAD/u sur ${h.samples} dossiers, ici ${Math.round(up)} MAD/u (${pct} %) (« ${desc} »)`);
+      }
+    } else {
+      const band = ln.priceBand;
+      if (band && up != null && up > 0) {
+        const [lo, hi] = band;
+        if (up < 0.5 * lo)
+          add(30, "high", "UNDERVALUE", `Valeur anormalement basse : ${Math.round(up)} MAD/u vs ${lo}–${hi} attendu (« ${desc} »)`);
+        else if (up < 0.8 * lo)
+          add(15, "medium", "LOW_VALUE", `Valeur basse : ${Math.round(up)} MAD/u vs ${lo}–${hi} attendu (« ${desc} »)`);
+        else if (up > 1.5 * hi)
+          add(10, "medium", "HIGH_VALUE", `Valeur élevée — vérifier la facture (« ${desc} »)`);
+      }
     }
 
     /* L3 — sensitive / controlled goods */

@@ -3,7 +3,7 @@ import { C } from "./tokens.js";
 import { Eyebrow, Mono, CircuitChip, useCountUp, DemoNote } from "./ui.jsx";
 import { dirOf } from "./lang.js";
 import { fmtInt, fmt } from "../shared/format.js";
-import { SHIPMENTS, surestarieFor, REF_DATE, TIMELINE } from "../data/shipments.js";
+import { SHIPMENTS, surestarieFor, REF_DATE, TIMELINE, computeBoardKpis } from "../data/shipments.js";
 
 const STATUS_LABEL = {
   en_route: "En route", arrivé: "Arrivé au port", sous_douane: "Sous douane",
@@ -11,17 +11,6 @@ const STATUS_LABEL = {
 };
 const PROGRESS = { en_route: 0, arrivé: 1, sous_douane: 2, inspection: 2, dédouané: 4, livré: 5 };
 const MODE_LABEL = { mer: "Maritime", air: "Aérien", route: "Route" };
-
-function computeKpis(shipments) {
-  return {
-    total: shipments.length,
-    vert: shipments.filter((s) => s.circuit === "vert").length,
-    orange: shipments.filter((s) => s.circuit === "orange").length,
-    rouge: shipments.filter((s) => s.circuit === "rouge").length,
-    surestarieMad: shipments.reduce((sum, s) => sum + (s.surestarie?.amount || 0), 0),
-    surestarieCount: shipments.filter((s) => s.surestarie?.state === "overdue").length,
-  };
-}
 
 export function DashboardDemo() {
   const [data, setData] = useState(null);
@@ -34,7 +23,7 @@ export function DashboardDemo() {
       .then((d) => { if (alive) setData(d); })
       .catch(() => {
         const shipments = SHIPMENTS.map((s) => ({ ...s, surestarie: surestarieFor(s) }));
-        if (alive) setData({ ref_date: REF_DATE, kpis: computeKpis(shipments), shipments });
+        if (alive) setData({ ref_date: REF_DATE, kpis: computeBoardKpis(shipments), shipments });
       });
     return () => { alive = false; };
   }, []);
@@ -60,6 +49,9 @@ export function DashboardDemo() {
         <Kpi label="Alertes surestaries" value={kpis.surestarieCount} tone={kpis.surestarieCount ? "rouge" : "vert"} />
         <Kpi label="Surestaries (MAD)" value={kpis.surestarieMad} money tone={kpis.surestarieMad ? "orange" : "vert"} />
       </div>
+
+      {/* Money story — what the pre-fill saves, and what's bleeding if untouched */}
+      <SavingsBanner kpis={kpis} />
 
       {/* Table */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", background: C.paper }}>
@@ -103,6 +95,30 @@ export function DashboardDemo() {
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SavingsBanner({ kpis }) {
+  const hours = kpis.rekeyHoursSaved || 0;
+  const exposure = kpis.dailyExposureMad || 0;
+  const atRisk = kpis.atRiskCount || 0;
+  return (
+    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 18 }} className="tt-stack">
+      <div style={{ flex: "1 1 280px", display: "flex", alignItems: "center", gap: 13, background: C.navy, borderRadius: 8, padding: "14px 18px", color: "#FCFBF8" }}>
+        <Mono style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.02em" }}>≈ {fmtInt(hours)} h</Mono>
+        <div style={{ fontSize: 12.5, lineHeight: 1.4, color: "#C9D4E4" }}>
+          de ressaisie <span style={{ color: "#FCFBF8", fontWeight: 500 }}>BADR évitée</span><br />
+          pré-remplissage IA sur {fmtInt(kpis.total)} dossiers
+        </div>
+      </div>
+      <div style={{ flex: "1 1 280px", display: "flex", alignItems: "center", gap: 13, background: exposure ? "#F4E9D2" : "#DCE5DD", borderRadius: 8, padding: "14px 18px", border: `1px solid ${C.border}` }}>
+        <Mono style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.02em", color: exposure ? "#8A5A12" : "#3F7A4E" }}>{fmtInt(exposure)} <span style={{ fontSize: 14 }}>MAD/j</span></Mono>
+        <div style={{ fontSize: 12.5, lineHeight: 1.4, color: C.ink2 }}>
+          de surestaries <span style={{ fontWeight: 500 }}>exposées</span> si non traitées<br />
+          {fmtInt(atRisk)} dossier(s) à risque (franchise dépassée ou imminente)
         </div>
       </div>
     </div>

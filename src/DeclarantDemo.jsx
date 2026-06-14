@@ -139,6 +139,7 @@ function Result({ decl, onBack }) {
   const landedAnim = useCountUp(totals.landed_cost_mad, shown(2));
 
   const numero = useMemo(() => "DUM-2026-" + String(1000 + Math.floor((totals.landed_cost_mad % 9000))).padStart(5, "0"), [decl]);
+  const histConfirm = (decl.lines || []).filter((l) => l.history && (l.history.status === "consistent" || l.history.status === "high"));
 
   return (
     <div style={{ animation: "coursFade .4s ease" }}>
@@ -253,6 +254,14 @@ function Result({ decl, onBack }) {
       <Section index="04" title="Contrôle des risques" revealed={shown(3)}
         tint={decl.risk.circuit === "vert" ? undefined : (decl.risk.circuit === "rouge" ? "#F2DAD5" : "#F4E9D2")}
         right={<CircuitChip circuit={decl.risk.circuit} />}>
+        {histConfirm.length > 0 && (
+          <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "#2F5A43", background: "#DCE5DD", border: `1px solid ${C.border}`, borderRadius: 7, padding: "9px 12px", marginBottom: decl.risk.flags.length ? 8 : 0 }}>
+            <span style={{ marginTop: 1 }}>✓</span>
+            <span style={{ lineHeight: 1.45 }}>
+              Valeurs cohérentes avec l'historique de l'importateur (<span dir={dirOf(histConfirm[0].history.importer || "")}>{histConfirm[0].history.importer}</span>) — {histConfirm.length} ligne(s) recoupée(s) sur ses dossiers passés.
+            </span>
+          </div>
+        )}
         {decl.risk.flags.length === 0 ? (
           <p style={{ fontSize: 13, color: "#2F5A43", margin: 0 }}>Aucun signal de risque — mainlevée automatique attendue (circuit vert).</p>
         ) : (
