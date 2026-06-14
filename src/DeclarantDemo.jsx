@@ -301,6 +301,7 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
       <Section index="04" title={t(locale, "d_sec_risk")} revealed={shown(3)}
         tint={decl.risk.circuit === "vert" ? undefined : (decl.risk.circuit === "rouge" ? "#F2DAD5" : "#F4E9D2")}
         right={<CircuitChip circuit={decl.risk.circuit} />}>
+        {decl.undervaluation && <StakeCallout u={decl.undervaluation} locale={locale} />}
         {histConfirm.length > 0 && (
           <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "#2F5A43", background: "#DCE5DD", border: `1px solid ${C.border}`, borderRadius: 7, padding: "9px 12px", marginBottom: decl.risk.flags.length ? 8 : 0 }}>
             <span style={{ marginTop: 1 }}>✓</span>
@@ -329,6 +330,43 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
       {/* 05 DUM document */}
       <div className="dum-reveal" style={{ opacity: shown(4) ? 1 : 0, transform: shown(4) ? "none" : "translateY(12px)", transition: "opacity .55s ease, transform .55s ease", marginTop: 20 }}>
         <DumDocument decl={decl} numero={numero} />
+      </div>
+    </div>
+  );
+}
+
+/* ----------------- money at stake (undervaluation exposure) ------------- */
+function StakeCallout({ u, locale }) {
+  const mult = u.declared_mad > 0 ? u.reference_mad / u.declared_mad : 0;
+  return (
+    <div style={{ border: "1px solid #E0B3A8", background: "#F2DAD5", borderRadius: 8, padding: "13px 15px", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 10.5, fontWeight: 600, fontFamily: "var(--mono)", letterSpacing: "0.04em", textTransform: "uppercase", color: "#7A2E22" }}>{t(locale, "d_stake_title")}</div>
+        <div style={{ textAlign: "end" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 5, justifyContent: "flex-end" }}>
+            <Mono style={{ fontSize: 27, fontWeight: 600, color: "#7A2E22", letterSpacing: "-0.02em" }}>{fmtInt(u.taxes_eluded_mad)}</Mono>
+            <span style={{ fontSize: 12.5, color: "#7A2E22" }}>MAD</span>
+          </div>
+          <div style={{ fontSize: 10.5, color: "#8A4034" }}>{t(locale, "d_stake_eluded")}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 22, marginTop: 11, flexWrap: "wrap" }}>
+        <StakeStat label={t(locale, "d_stake_declared")} value={fmtInt(u.declared_mad)} />
+        <StakeStat label={t(locale, "d_stake_reference")} value={fmtInt(u.reference_mad)} sub={"×" + Math.round(mult)} />
+        <StakeStat label={t(locale, "d_stake_gap")} value={fmtInt(u.gap_mad)} />
+      </div>
+    </div>
+  );
+}
+
+function StakeStat({ label, value, sub }) {
+  return (
+    <div>
+      <div style={{ fontSize: 9.5, fontFamily: "var(--mono)", letterSpacing: "0.04em", textTransform: "uppercase", color: "#9A5A4A" }}>{label}</div>
+      <div style={{ marginTop: 2, color: "#5A2018" }}>
+        <Mono style={{ fontSize: 13.5, fontWeight: 600 }}>{value}</Mono>
+        <span style={{ fontSize: 11, color: "#8A4034" }}> MAD</span>
+        {sub ? <span style={{ fontSize: 11, fontWeight: 600, marginInlineStart: 6, color: "#7A2E22" }}>{sub}</span> : null}
       </div>
     </div>
   );

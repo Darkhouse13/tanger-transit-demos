@@ -95,6 +95,33 @@ export function enrichDeclaration(extracted, meta = {}) {
 
   const risk = assessRisk({ lines: withHistory, origin_country, coo_present, importer_known });
 
+  /* 4 — money at stake: for lines undervalued vs the importer's own history,
+     quantify the under-declared customs value and the duty+VAT+TPI it would
+     escape. Deterministic — the gap is run through the SAME landed engine
+     (in MAD; baselines and goods values are already MAD). */
+  const underLines = withHistory.filter((l) => l.history && l.history.status === "low");
+  let undervaluation = null;
+  if (underLines.length) {
+    let declared = 0, reference = 0, gap = 0, taxesEluded = 0;
+    for (const l of underLines) {
+      const ref = (l.history.baseline_mad || 0) * (Number(l.quantity) || 0);
+      const dec = l.goods_value_mad || 0;
+      const g = Math.max(0, ref - dec);
+      declared += dec; reference += ref; gap += g;
+      taxesEluded += computeLanded(
+        [{ line_total: g, duty: l.duty, vat: l.vat, tpi: l.tpi }],
+        { currency: "MAD" }
+      ).totals.taxes_total_mad;
+    }
+    undervaluation = {
+      lines: underLines.length,
+      declared_mad: declared,
+      reference_mad: reference,
+      gap_mad: gap,
+      taxes_eluded_mad: taxesEluded,
+    };
+  }
+
   return {
     header,
     currency,
@@ -102,6 +129,7 @@ export function enrichDeclaration(extracted, meta = {}) {
     lines: withHistory,
     totals,
     risk,
+    undervaluation,
     coo_present,
     origin_country,
     importer_known, // surfaced so a client-side recompute keeps the same circuit basis
