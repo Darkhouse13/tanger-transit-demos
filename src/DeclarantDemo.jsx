@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import { C } from "./tokens.js";
 import { Eyebrow, Btn, Mono, Section, Field, CircuitChip, Analyzing, DemoNote, useCountUp, grid } from "./ui.jsx";
 import { dirOf } from "./lang.js";
+import { useLocale } from "./Locale.jsx";
+import { t } from "./i18n.js";
 import { mad, fmt, fmtInt } from "../shared/format.js";
 import { INVOICES } from "../data/invoices.js";
 import { TARIFF_NOTE } from "../shared/tariff.js";
@@ -32,20 +34,6 @@ function recompute(decl, hsOverrides) {
   });
 }
 
-const STEPS = [
-  "Lecture de la facture",
-  "Extraction des lignes & des parties",
-  "Suggestion du code SH (10 chiffres)",
-  "Calcul de la valeur en douane (CIF)",
-  "Droits + TVA 20 % + TPI",
-  "Contrôle des risques — circuit",
-];
-
-const DOC_LABEL = {
-  facture: "Facture", colisage: "Liste de colisage",
-  certificat_origine: "Certificat d'origine", bl: "Connaissement (BL)",
-};
-
 const SEV_STYLE = {
   high: { fg: "#7A2E22", bg: "#F2DAD5" },
   medium: { fg: "#8A5A12", bg: "#F4E9D2" },
@@ -53,6 +41,7 @@ const SEV_STYLE = {
 };
 
 export function DeclarantDemo({ onNavigate }) {
+  const { locale } = useLocale();
   const [view, setView] = useState("reception");
   const [decl, setDecl] = useState(null);
   const [source, setSource] = useState(null);
@@ -82,23 +71,23 @@ export function DeclarantDemo({ onNavigate }) {
     }
   }
 
-  if (view === "analyzing") return <Analyzing steps={STEPS} source={source} text={rawText} title="Lecture de la facture" note="L'IA structure la facture — codes SH, droits, TVA et risque sont calculés par du code déterministe." />;
+  if (view === "analyzing") return <Analyzing steps={[1, 2, 3, 4, 5, 6].map((n) => t(locale, "d_step" + n))} source={source} text={rawText} title={t(locale, "d_an_title")} note={t(locale, "d_an_note")} />;
   if (view === "result" && decl) return <Result decl={decl} onBack={() => setView("reception")} onNavigate={onNavigate} />;
   return <Reception onPick={run} error={error} />;
 }
 
 /* ------------------------------ réception ------------------------------- */
 function Reception({ onPick, error }) {
+  const { locale } = useLocale();
   const [paste, setPaste] = useState("");
   return (
     <div style={{ animation: "coursFade .4s ease" }}>
-      <Eyebrow>01 — Réception</Eyebrow>
+      <Eyebrow>{t(locale, "d_recept_eyebrow")}</Eyebrow>
       <h1 style={{ fontSize: 25, fontWeight: 600, color: C.ink, margin: "8px 0 6px", letterSpacing: "-0.02em" }}>
-        Factures à dédouaner
+        {t(locale, "d_recept_title")}
       </h1>
       <p style={{ fontSize: 14, color: C.muted, marginBottom: 20, maxWidth: 600, lineHeight: 1.55 }}>
-        Sélectionnez une facture pour lancer l'extraction, ou collez le texte d'une facture.
-        L'IA lit la facture et la convertit en déclaration structurée — le classement SH, les droits et le contrôle du risque restent du code déterministe.
+        {t(locale, "d_recept_lede")}
       </p>
 
       {error && (
@@ -135,13 +124,13 @@ function Reception({ onPick, error }) {
       </div>
 
       <div style={{ marginTop: 18, border: `1px solid ${C.border}`, borderRadius: 8, background: C.paper, padding: 18 }}>
-        <Eyebrow color={C.muted}>Coller une facture</Eyebrow>
+        <Eyebrow color={C.muted}>{t(locale, "d_paste_eyebrow")}</Eyebrow>
         <textarea value={paste} onChange={(e) => setPaste(e.target.value)}
-          placeholder="Collez ici le texte brut d'une facture commerciale…" className="cours-scroll"
+          placeholder={t(locale, "d_paste_ph")} className="cours-scroll" dir={dirOf(paste)}
           style={{ width: "100%", minHeight: 92, marginTop: 10, resize: "vertical", border: `1px solid ${C.border}`, borderRadius: 7, padding: "11px 13px", fontFamily: "var(--sans)", fontSize: 13, color: C.ink, background: C.page, outline: "none", lineHeight: 1.55, boxSizing: "border-box" }} />
         <div style={{ marginTop: 11, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <DemoNote>{TARIFF_NOTE}</DemoNote>
-          <Btn disabled={!paste.trim()} onClick={() => onPick(paste.trim(), null)}>Extraire la déclaration</Btn>
+          <Btn disabled={!paste.trim()} onClick={() => onPick(paste.trim(), null)}>{t(locale, "d_paste_btn")}</Btn>
         </div>
       </div>
     </div>
@@ -150,6 +139,7 @@ function Reception({ onPick, error }) {
 
 /* ------------------------------- résultat ------------------------------- */
 function Result({ decl: initialDecl, onBack, onNavigate }) {
+  const { locale } = useLocale();
   const [decl, setDecl] = useState(initialDecl);
   const [overrides, setOverrides] = useState({});
   const [openLine, setOpenLine] = useState(null);
@@ -184,31 +174,31 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
     <div style={{ animation: "coursFade .4s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, margin: "0 0 18px" }}>
         <div>
-          <Eyebrow>02 — Déclaration extraite</Eyebrow>
+          <Eyebrow>{t(locale, "d_res_eyebrow")}</Eyebrow>
           <h1 style={{ fontSize: 25, fontWeight: 600, color: C.ink, margin: "8px 0 4px", letterSpacing: "-0.02em" }} dir={dirOf(buyer.name || "")}>
-            {buyer.name || "Importateur à confirmer"}
+            {buyer.name || t(locale, "d_importer_tbc")}
           </h1>
           <p style={{ fontSize: 13.5, color: C.muted, margin: 0 }}>
-            {seller.name ? `${seller.name} → ` : ""}{buyer.city || "Maroc"} · facture {header.invoice_no || "—"} · {decl.currency}
+            {seller.name ? `${seller.name} → ` : ""}{buyer.city || "Maroc"} · {t(locale, "d_invoice_word")} {header.invoice_no || "—"} · {decl.currency}
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <CircuitChip circuit={decl.risk.circuit} big />
-          <Btn onClick={() => { addTracked(dossierFromDecl(decl)); if (onNavigate) onNavigate("board"); }}>Suivre ce dossier ↗</Btn>
-          <Btn variant="ghost" onClick={onBack}>← Autre facture</Btn>
+          <Btn onClick={() => { addTracked(dossierFromDecl(decl)); if (onNavigate) onNavigate("board"); }}>{t(locale, "d_track_btn")}</Btn>
+          <Btn variant="ghost" onClick={onBack}>{t(locale, "d_back_btn")}</Btn>
         </div>
       </div>
 
       {/* 01 Parties */}
-      <Section index="01" title="Parties & document" revealed={shown(0)}>
+      <Section index="01" title={t(locale, "d_sec_parties")} revealed={shown(0)}>
         <div style={grid(4)} className="tt-grid-2">
-          <Field label="Exportateur" value={seller.name} autoDir missing={!seller.name} hint={seller.country} />
-          <Field label="Importateur" value={buyer.name} autoDir missing={!buyer.name} hint={buyer.city} />
-          <Field label="Incoterm" value={header.incoterm} mono missing={!header.incoterm} hint={header.incoterm_place} />
-          <Field label="Origine déclarée" value={decl.origin_country} mono missing={!decl.origin_country} />
+          <Field label={t(locale, "d_f_exporter")} value={seller.name} autoDir missing={!seller.name} hint={seller.country} />
+          <Field label={t(locale, "d_f_importer")} value={buyer.name} autoDir missing={!buyer.name} hint={buyer.city} />
+          <Field label={t(locale, "d_f_incoterm")} value={header.incoterm} mono missing={!header.incoterm} hint={header.incoterm_place} />
+          <Field label={t(locale, "d_f_origin")} value={decl.origin_country} mono missing={!decl.origin_country} />
         </div>
         <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {["facture", "colisage", "certificat_origine", "bl"].map((d) => {
+          {[["facture", "d_doc_facture"], ["colisage", "d_doc_colisage"], ["certificat_origine", "d_doc_coo"], ["bl", "d_doc_bl"]].map(([d, key]) => {
             const present = (decl.documents_present || []).includes(d);
             return (
               <span key={d} style={{
@@ -216,7 +206,7 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
                 display: "inline-flex", alignItems: "center", gap: 6,
                 color: present ? "#2F5A43" : "#7A2E22", background: present ? "#DCE5DD" : "#F2DAD5",
               }}>
-                <span>{present ? "✓" : "✕"}</span> {DOC_LABEL[d]}
+                <span>{present ? "✓" : "✕"}</span> {t(locale, key)}
               </span>
             );
           })}
@@ -224,14 +214,14 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
       </Section>
 
       {/* 02 Lignes & codes SH */}
-      <Section index="02" title="Lignes & codes SH" revealed={shown(1)}
-        right={<DemoNote style={{ marginInlineStart: "auto" }}>tarifs illustratifs</DemoNote>}>
+      <Section index="02" title={t(locale, "d_sec_lines")} revealed={shown(1)}
+        right={<DemoNote style={{ marginInlineStart: "auto" }}>{t(locale, "d_tarifs_illus")}</DemoNote>}>
         <div className="cours-scroll" style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
             <thead>
               <tr>
-                {["Désignation", "Code SH", "Valeur CIF", "Droit", "TVA", "Revient"].map((h, i) => (
-                  <th key={h} style={{ textAlign: i > 1 ? "end" : "start", fontSize: 10, fontWeight: 600, fontFamily: "var(--mono)", color: C.faint, letterSpacing: "0.04em", textTransform: "uppercase", padding: "0 12px 9px" }}>{h}</th>
+                {["d_th_desc", "d_th_hs", "d_th_cif", "d_th_duty", "d_th_vat", "d_th_landed"].map((k, i) => (
+                  <th key={k} style={{ textAlign: i > 1 ? "end" : "start", fontSize: 10, fontWeight: 600, fontFamily: "var(--mono)", color: C.faint, letterSpacing: "0.04em", textTransform: "uppercase", padding: "0 12px 9px" }}>{t(locale, k)}</th>
                 ))}
               </tr>
             </thead>
@@ -250,16 +240,16 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
                     <td style={{ padding: "11px 12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <Mono style={{ fontSize: 12.5, color: C.navy }}>{l.hs_code}</Mono>
-                        {l.manual_hs && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>manuel</span>}
+                        {l.manual_hs && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>{t(locale, "d_manual")}</span>}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3 }}>
                         <span style={{ width: 30, height: 4, borderRadius: 3, background: C.tint2, overflow: "hidden", display: "inline-block" }}>
                           <span style={{ display: "block", height: "100%", width: `${pct}%`, background: l.manual_hs ? C.navy : low ? "#C98A2B" : "#3F7A4E" }} />
                         </span>
-                        <span style={{ fontSize: 10, color: low && !l.manual_hs ? "#8A5A12" : C.muted }}>{l.manual_hs ? "validé" : pct + "%" + (low ? " · à vérifier" : "")}</span>
+                        <span style={{ fontSize: 10, color: low && !l.manual_hs ? "#8A5A12" : C.muted }}>{l.manual_hs ? t(locale, "d_validated") : pct + "%" + (low ? " · " + t(locale, "d_to_verify") : "")}</span>
                       </div>
                       <button onClick={() => setOpenLine(isOpen ? null : i)} style={{ marginTop: 5, border: "none", background: "transparent", padding: 0, cursor: "pointer", fontSize: 10.5, color: C.navy, fontFamily: "var(--sans)" }}>
-                        {isOpen ? "▾ " : "▸ "}pourquoi / modifier{l.alternates && l.alternates.length ? ` (${l.alternates.length})` : ""}
+                        {isOpen ? "▾ " : "▸ "}{t(locale, "d_why_modify")}{l.alternates && l.alternates.length ? ` (${l.alternates.length})` : ""}
                       </button>
                     </td>
                     <td style={{ textAlign: "end", padding: "11px 12px" }}><Mono style={{ fontSize: 12, color: C.ink2 }}>{fmt(l.cif_mad)}</Mono></td>
@@ -286,41 +276,41 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
       </Section>
 
       {/* 03 Valeur en douane */}
-      <Section index="03" title="Valeur en douane & taxes" revealed={shown(2)}>
+      <Section index="03" title={t(locale, "d_sec_value")} revealed={shown(2)}>
         <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }} className="tt-stack">
           <div style={{ background: C.navy, borderRadius: 8, padding: "16px 20px", color: "#FCFBF8", minWidth: 230, flex: "1 1 230px" }}>
-            <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9DB0C9" }}>Coût de revient dédouané</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9DB0C9" }}>{t(locale, "d_landed_label")}</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 6 }}>
               <Mono style={{ fontSize: 32, fontWeight: 500, letterSpacing: "-0.02em" }}>{fmtInt(landedAnim)}</Mono>
               <span style={{ fontSize: 14, color: "#9DB0C9" }}>MAD</span>
             </div>
-            <div style={{ fontSize: 11, color: "#9DB0C9", marginTop: 6 }}>CIF + droits + TVA + TPI</div>
+            <div style={{ fontSize: 11, color: "#9DB0C9", marginTop: 6 }}>{t(locale, "d_landed_formula")}</div>
           </div>
           <div style={{ flex: "2 1 320px", display: "flex", alignItems: "center" }}>
             <div style={{ ...grid(4), width: "100%" }} className="tt-grid-2">
-              <Field label="Valeur CIF" value={mad(totals.cif_mad)} mono />
-              <Field label="Droits de douane" value={mad(totals.duty_mad)} mono accent />
-              <Field label="TVA (20 %)" value={mad(totals.vat_mad)} mono />
-              <Field label="TPI (0,25 %)" value={mad(totals.tpi_mad)} mono />
+              <Field label={t(locale, "d_th_cif")} value={mad(totals.cif_mad)} mono />
+              <Field label={t(locale, "d_f_duty_full")} value={mad(totals.duty_mad)} mono accent />
+              <Field label={t(locale, "d_f_vat_full")} value={mad(totals.vat_mad)} mono />
+              <Field label={t(locale, "d_f_tpi_full")} value={mad(totals.tpi_mad)} mono />
             </div>
           </div>
         </div>
       </Section>
 
       {/* 04 Risque */}
-      <Section index="04" title="Contrôle des risques" revealed={shown(3)}
+      <Section index="04" title={t(locale, "d_sec_risk")} revealed={shown(3)}
         tint={decl.risk.circuit === "vert" ? undefined : (decl.risk.circuit === "rouge" ? "#F2DAD5" : "#F4E9D2")}
         right={<CircuitChip circuit={decl.risk.circuit} />}>
         {histConfirm.length > 0 && (
           <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "#2F5A43", background: "#DCE5DD", border: `1px solid ${C.border}`, borderRadius: 7, padding: "9px 12px", marginBottom: decl.risk.flags.length ? 8 : 0 }}>
             <span style={{ marginTop: 1 }}>✓</span>
             <span style={{ lineHeight: 1.45 }}>
-              Valeurs cohérentes avec l'historique de l'importateur (<span dir={dirOf(histConfirm[0].history.importer || "")}>{histConfirm[0].history.importer}</span>) — {histConfirm.length} ligne(s) recoupée(s) sur ses dossiers passés.
+              {t(locale, "d_hist_ok_a")} (<span dir={dirOf(histConfirm[0].history.importer || "")}>{histConfirm[0].history.importer}</span>) — {histConfirm.length} {t(locale, "d_hist_ok_b")}
             </span>
           </div>
         )}
         {decl.risk.flags.length === 0 ? (
-          <p style={{ fontSize: 13, color: "#2F5A43", margin: 0 }}>Aucun signal de risque — mainlevée automatique attendue (circuit vert).</p>
+          <p style={{ fontSize: 13, color: "#2F5A43", margin: 0 }}>{t(locale, "d_no_risk")}</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             {decl.risk.flags.map((f, i) => {
@@ -346,20 +336,22 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
 
 /* ------------------- HS explainability + manual override ---------------- */
 function HsExplain({ line, onPick, onReset }) {
+  const { locale } = useLocale();
   const alts = line.alternates || [];
+  const label = (a) => (locale === "ar" ? a.ar || a.fr : a.fr);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 12, color: C.ink2 }}>
-        <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.faint }}>Pourquoi ce code</span>
-        <div style={{ marginTop: 3, lineHeight: 1.5 }}>
+        <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.faint }}>{t(locale, "d_why_code")}</span>
+        <div dir="ltr" style={{ marginTop: 3, lineHeight: 1.5 }}>
           {line.classification_reason || "—"}
-          {line.priceBand ? ` · valeur attendue ${line.priceBand[0]}–${line.priceBand[1]} MAD/u` : ""}
+          {line.priceBand ? ` · ${t(locale, "d_expected_value")} ${line.priceBand[0]}–${line.priceBand[1]} MAD/u` : ""}
         </div>
       </div>
       {alts.length > 0 && (
         <div>
           <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.faint, marginBottom: 6 }}>
-            Autres codes possibles — cliquez pour reclasser
+            {t(locale, "d_other_codes")}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {alts.map((a) => (
@@ -369,9 +361,9 @@ function HsExplain({ line, onPick, onReset }) {
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                   <Mono style={{ fontSize: 12, color: C.navy, fontWeight: 600 }}>{a.code}</Mono>
-                  <span style={{ fontSize: 10.5, color: C.ink2 }}>droit {a.duty} %</span>
+                  <span style={{ fontSize: 10.5, color: C.ink2 }}>{t(locale, "d_duty_word")} {a.duty} %</span>
                 </div>
-                <div dir={dirOf(a.fr)} style={{ fontSize: 11.5, color: C.muted, marginTop: 2, lineHeight: 1.35 }}>{a.fr}</div>
+                <div dir={dirOf(label(a))} style={{ fontSize: 11.5, color: C.muted, marginTop: 2, lineHeight: 1.35 }}>{label(a)}</div>
               </button>
             ))}
           </div>
@@ -379,16 +371,17 @@ function HsExplain({ line, onPick, onReset }) {
       )}
       {onReset && (
         <button onClick={onReset} style={{ alignSelf: "flex-start", border: "none", background: "transparent", padding: 0, cursor: "pointer", fontSize: 11, color: C.navy, fontFamily: "var(--sans)" }}>
-          ↺ rétablir la suggestion automatique
+          {t(locale, "d_reset_auto")}
         </button>
       )}
-      <DemoNote>Même moteur que le serveur — valeur en douane, droits et circuit recalculés instantanément.</DemoNote>
+      <DemoNote>{t(locale, "d_same_engine")}</DemoNote>
     </div>
   );
 }
 
 /* --------------------------- DUM serif document ------------------------- */
 function DumDocument({ decl, numero }) {
+  const { locale } = useLocale();
   const totals = decl.totals;
   const header = decl.header || {};
   const buyer = header.buyer || {};
@@ -400,7 +393,7 @@ function DumDocument({ decl, numero }) {
           display: "inline-flex", alignItems: "center", gap: 7, border: `1px solid ${C.border2}`,
           background: C.page, color: C.navy, borderRadius: 7, padding: "7px 13px", cursor: "pointer",
           fontFamily: "var(--sans)", fontSize: 12.5, fontWeight: 500,
-        }}>⎙ Imprimer / Enregistrer en PDF</button>
+        }}>⎙ {t(locale, "d_print_btn")}</button>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: `1px solid ${C.border}`, paddingBottom: 16, marginBottom: 18 }}>
         <div>
@@ -408,26 +401,26 @@ function DumDocument({ decl, numero }) {
             <span style={{ fontSize: 17, fontWeight: 600, fontFamily: "var(--sans)", letterSpacing: "-0.02em" }}>Strait Systems</span>
             <span style={{ width: 8, height: 8, background: C.navy, borderRadius: 2 }} />
           </div>
-          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>Déclaration assistée — pré-remplissage BADR</div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>{t(locale, "d_dum_assist")}</div>
         </div>
         <div style={{ textAlign: "end" }}>
-          <div style={{ fontSize: 18, fontWeight: 500 }}>Déclaration Unique de Marchandises</div>
-          <Mono style={{ fontSize: 12, color: C.navy }}>N° {numero} · projet</Mono>
+          <div style={{ fontSize: 18, fontWeight: 500 }}>{t(locale, "d_dum_title")}</div>
+          <Mono style={{ fontSize: 12, color: C.navy }}>N° {numero} · {t(locale, "d_dum_projet")}</Mono>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px", marginBottom: 18 }} className="tt-grid-2">
-        <DumMeta label="Importateur" value={buyer.name} dir={dirOf(buyer.name || "")} />
-        <DumMeta label="Exportateur" value={seller.name ? `${seller.name} (${seller.country || "—"})` : "—"} />
-        <DumMeta label="Régime" value="Mise à la consommation" />
-        <DumMeta label="Origine / Incoterm" value={`${decl.origin_country || "—"} · ${header.incoterm || "—"}`} />
+        <DumMeta label={t(locale, "d_f_importer")} value={buyer.name} dir={dirOf(buyer.name || "")} />
+        <DumMeta label={t(locale, "d_f_exporter")} value={seller.name ? `${seller.name} (${seller.country || "—"})` : "—"} />
+        <DumMeta label={t(locale, "d_dum_regime")} value={t(locale, "d_dum_regime_val")} />
+        <DumMeta label={t(locale, "d_dum_origin_inco")} value={`${decl.origin_country || "—"} · ${header.incoterm || "—"}`} />
       </div>
 
       <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 4 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${C.border2}` }}>
-            {["Code SH", "Désignation", "Valeur CIF", "Droits", "TVA"].map((h, i) => (
-              <th key={h} style={{ textAlign: i > 1 ? "end" : "start", fontSize: 11, fontWeight: 600, fontFamily: "var(--sans)", color: C.muted, padding: "0 0 7px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{h}</th>
+            {["d_th_hs", "d_th_desc", "d_th_cif", "d_dum_th_duty", "d_th_vat"].map((k, i) => (
+              <th key={k} style={{ textAlign: i > 1 ? "end" : "start", fontSize: 11, fontWeight: 600, fontFamily: "var(--sans)", color: C.muted, padding: "0 0 7px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t(locale, k)}</th>
             ))}
           </tr>
         </thead>
@@ -435,7 +428,7 @@ function DumDocument({ decl, numero }) {
           {decl.lines.map((l, i) => (
             <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
               <td style={{ padding: "9px 0" }}><Mono style={{ fontSize: 12, color: C.navy }}>{l.hs_code}</Mono></td>
-              <td style={{ padding: "9px 8px", fontSize: 13 }} dir={dirOf(l.description)}>{l.hs_label_fr}</td>
+              <td style={{ padding: "9px 8px", fontSize: 13 }} dir={dirOf(locale === "ar" ? l.hs_label_ar : l.hs_label_fr)}>{locale === "ar" ? (l.hs_label_ar || l.hs_label_fr) : l.hs_label_fr}</td>
               <td style={{ textAlign: "end", padding: "9px 0" }}><Mono style={{ fontSize: 12, color: C.ink }}>{fmt(l.cif_mad)}</Mono></td>
               <td style={{ textAlign: "end", padding: "9px 0" }}><Mono style={{ fontSize: 12, color: C.ink }}>{fmt(l.duty_mad)}</Mono></td>
               <td style={{ textAlign: "end", padding: "9px 0" }}><Mono style={{ fontSize: 12, color: C.ink }}>{fmt(l.vat_mad)}</Mono></td>
@@ -445,17 +438,17 @@ function DumDocument({ decl, numero }) {
       </table>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, padding: "13px 16px", background: C.navy, borderRadius: 8, color: "#FCFBF8" }}>
-        <span style={{ fontSize: 14, fontWeight: 500 }}>Total droits & taxes</span>
+        <span style={{ fontSize: 14, fontWeight: 500 }}>{t(locale, "d_dum_total")}</span>
         <Mono style={{ fontSize: 21, fontWeight: 500 }}>{mad(totals.taxes_total_mad)}</Mono>
       </div>
 
       <div style={{ marginTop: 18, paddingTop: 15, borderTop: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 11.5, color: C.faint, fontFamily: "var(--sans)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Note</div>
+        <div style={{ fontSize: 11.5, color: C.faint, fontFamily: "var(--sans)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t(locale, "d_dum_note_label")}</div>
         <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.65, margin: 0 }}>
-          Projet de déclaration généré à partir de la facture. Codes SH, valeur en douane (CIF), droits, TVA (20 %) et TPI calculés par du code déterministe sur une grille tarifaire de démonstration — à valider sur l'ADIL avant dépôt dans BADR. Aucune valeur n'est inventée par l'IA.
+          {t(locale, "d_dum_note")}
         </p>
       </div>
-      <div style={{ marginTop: 16, fontSize: 11, color: C.faint, fontFamily: "var(--sans)", textAlign: "center" }}>Conçu par Strait Systems</div>
+      <div style={{ marginTop: 16, fontSize: 11, color: C.faint, fontFamily: "var(--sans)", textAlign: "center" }}>{t(locale, "d_designed_by")}</div>
     </div>
   );
 }

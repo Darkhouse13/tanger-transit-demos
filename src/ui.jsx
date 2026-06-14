@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { C, CIRCUIT } from "./tokens.js";
 import { dirOf } from "./lang.js";
+import { useLocale } from "./Locale.jsx";
+import { t } from "./i18n.js";
 
 export const grid = (cols) => ({ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "16px 22px" });
 
@@ -58,7 +60,9 @@ export function Btn({ children, onClick, variant = "primary", disabled, style })
   );
 }
 
-export function AConfirmer({ label = "à confirmer" }) {
+export function AConfirmer({ label }) {
+  const { locale } = useLocale();
+  label = label || t(locale, "aconfirm");
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 500,
@@ -72,6 +76,7 @@ export function AConfirmer({ label = "à confirmer" }) {
 
 /* --------------------------- circuit chip ------------------------------- */
 export function CircuitChip({ circuit, big }) {
+  const { locale } = useLocale();
   const s = CIRCUIT[circuit] || CIRCUIT.vert;
   return (
     <span style={{
@@ -81,7 +86,7 @@ export function CircuitChip({ circuit, big }) {
       padding: big ? "6px 13px" : "4px 10px",
     }}>
       <span style={{ width: big ? 8 : 6, height: big ? 8 : 6, borderRadius: 8, background: s.dot }} />
-      Circuit {s.label}
+      {locale === "ar" ? `المسار ${s.ar}` : `Circuit ${s.label}`}
     </span>
   );
 }
@@ -139,7 +144,8 @@ export function DemoNote({ children, style }) {
 }
 
 /* ----------------------- analysing checklist ---------------------------- */
-export function Analyzing({ steps, source, text, title = "Lecture de la facture", note }) {
+export function Analyzing({ steps, source, text, title, note }) {
+  const { locale } = useLocale();
   const [step, setStep] = useState(0);
   useEffect(() => {
     const tmr = setInterval(() => setStep((s) => Math.min(s + 1, steps.length)), 360);
@@ -147,7 +153,7 @@ export function Analyzing({ steps, source, text, title = "Lecture de la facture"
   }, []);
   return (
     <div style={{ animation: "coursFade .35s ease", maxWidth: 720, margin: "0 auto" }}>
-      <Eyebrow color={C.navy}>Analyse en cours</Eyebrow>
+      <Eyebrow color={C.navy}>{t(locale, "d_an_eyebrow")}</Eyebrow>
       <h1 style={{ fontSize: 22, fontWeight: 600, color: C.ink, margin: "8px 0 18px", letterSpacing: "-0.02em" }}>{title}</h1>
 
       {(source || text) && (
