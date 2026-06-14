@@ -337,7 +337,7 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
       </Section>
 
       {/* 05 DUM document */}
-      <div style={{ opacity: shown(4) ? 1 : 0, transform: shown(4) ? "none" : "translateY(12px)", transition: "opacity .55s ease, transform .55s ease", marginTop: 20 }}>
+      <div className="dum-reveal" style={{ opacity: shown(4) ? 1 : 0, transform: shown(4) ? "none" : "translateY(12px)", transition: "opacity .55s ease, transform .55s ease", marginTop: 20 }}>
         <DumDocument decl={decl} numero={numero} />
       </div>
     </div>
@@ -394,7 +394,14 @@ function DumDocument({ decl, numero }) {
   const buyer = header.buyer || {};
   const seller = header.seller || {};
   return (
-    <div style={{ background: C.paper, border: `1px solid ${C.border2}`, borderRadius: 8, padding: "30px 32px", fontFamily: "var(--serif)", color: C.ink, boxShadow: "0 1px 0 rgba(0,0,0,0.02)" }}>
+    <div id="dum-print" style={{ background: C.paper, border: `1px solid ${C.border2}`, borderRadius: 8, padding: "30px 32px", fontFamily: "var(--serif)", color: C.ink, boxShadow: "0 1px 0 rgba(0,0,0,0.02)" }}>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <button onClick={() => window.print()} style={{
+          display: "inline-flex", alignItems: "center", gap: 7, border: `1px solid ${C.border2}`,
+          background: C.page, color: C.navy, borderRadius: 7, padding: "7px 13px", cursor: "pointer",
+          fontFamily: "var(--sans)", fontSize: 12.5, fontWeight: 500,
+        }}>⎙ Imprimer / Enregistrer en PDF</button>
+      </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: `1px solid ${C.border}`, paddingBottom: 16, marginBottom: 18 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
