@@ -5,7 +5,7 @@ export const HELP = {
       ["L'IA structure, le code calcule", "L'IA se limite à lire et structurer le texte des factures. Tous les montants (valeur en douane, droits, TVA, TPI, coût de revient) et le contrôle du risque sont calculés par du code déterministe sur une grille tarifaire — à facture identique, résultat identique."],
       ["Données illustratives", "Sociétés, prix, historiques et tarifs sont synthétiques. La grille tarifaire est remplaçable par le tarif ADIL réel du client."],
       ["BADR sans API publique", "BADR / PortNet n'exposent pas d'API. Le circuit affiché est une prédiction de notre moteur ; le déclarant la confirme ou la corrige avec la réponse réelle de BADR."],
-      ["Taux de change figés", "Conversion en MAD via une table figée (EUR 10,85 · USD 9,95 · CNY 1,38 · GBP 12,60 · TRY 0,30). En production : taux de change officiel de la douane à la date de l'opération."],
+      ["Taux de change officiel", "Conversion en MAD au cours officiel de la douane (ADII), en vigueur au 13/06/2026 (EUR 10,85 · USD 9,95 · CNY 1,38 · GBP 12,60 · TRY 0,30). En production, ce cours du jour est repris quotidiennement du référentiel ADII ; figé ici pour la démonstration."],
     ],
   },
   declarant: {
@@ -32,6 +32,8 @@ export const HELP = {
     title: "Tableau de bord — suivi du dédouanement",
     items: [
       ["Circuits", "Vert (mainlevée automatique, ~60 %), Orange (contrôle documentaire, ~25 %), Rouge (visite physique, ~15 %, 2–5 jours)."],
+      ["Actions prioritaires", "La file d'actions trie les dossiers par urgence (surestaries en cours, franchise imminente, visite douane, saisie à corriger) et propose l'action à mener pour chacun — cliquez pour ouvrir le dossier."],
+      ["Suivi importateur", "Chaque dossier expose un lien en lecture seule à envoyer à l'importateur (WhatsApp / e-mail) : il suit son circuit, ses étapes et sa franchise sans appeler."],
       ["Prédiction BADR", "« prédit juste » / « corrigé » compare notre prédiction au circuit réellement affecté ; la précision agrège ces résultats."],
       ["Surestaries", "Au-delà de la franchise (free-time), chaque jour de retard coûte un montant journalier (illustratif, ~500–1 500 MAD/j). Date de référence figée pour la démonstration."],
       ["Sous-déclaration", "Pour les valeurs anormalement basses face à l'historique de l'importateur, on chiffre l'écart et les droits & taxes potentiellement éludés."],

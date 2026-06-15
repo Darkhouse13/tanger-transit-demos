@@ -13,7 +13,9 @@
      assumed — we injected a default/derived value             → "hypothèse"
    ===================================================================== */
 
-import { FX_TO_MAD, fmt } from "./format.js";
+import { FX_TO_MAD, FX_EFFECTIVE_DATE, fmt } from "./format.js";
+
+const ddmmyyyy = (iso) => { const p = String(iso || "").split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso; };
 
 const REGIME = { code: "031", fr: "Mise à la consommation", ar: "الاستهلاك المحلي" };
 
@@ -64,8 +66,8 @@ export function toBadrDeclaration(decl = {}, opts = {}) {
       header.incoterm ? `${header.incoterm}${header.incoterm_place ? " " + header.incoterm_place : ""}` : null,
       { raw: header.incoterm || null, missing: !header.incoterm }),
     field("devise", "Devise facture", "عملة الفاتورة", currency, { raw: currency }),
-    field("taux_change", "Taux de change", "سعر الصرف",
-      currency === "MAD" ? "1,0000 (MAD)" : `1 ${currency} = ${fmt(fxRate, 4)} MAD`,
+    field("taux_change", "Taux de change (officiel)", "سعر الصرف (رسمي)",
+      currency === "MAD" ? "1,0000 (MAD)" : `1 ${currency} = ${fmt(fxRate, 4)} MAD · cours du ${ddmmyyyy(FX_EFFECTIVE_DATE)}`,
       { raw: fxRate, assumed: true }),
     field("fret", "Fret", "الشحن", `${num(header.freight_amount || 0)} ${currency}`, { raw: header.freight_amount || 0 }),
     field("assurance", "Assurance", "التأمين", `${num(header.insurance_amount || 0)} ${currency}`, { raw: header.insurance_amount || 0 }),
@@ -118,6 +120,7 @@ export function toBadrDeclaration(decl = {}, opts = {}) {
     circuit_prevu: circuit,
     devise: currency,
     taux_change_mad: fxRate,
+    taux_change_date: FX_EFFECTIVE_DATE,
     entete: flat(head),
     articles: articles.map((a) => ({ article: a.index, ...flat(a.fields) })),
     totaux: flat(totalsList),

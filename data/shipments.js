@@ -7,6 +7,8 @@
    status:  en_route | arrivé | sous_douane | inspection | dédouané | livré
    ===================================================================== */
 
+import { fmtInt } from "../shared/format.js";
+
 export const REF_DATE = "2026-06-13"; // "today" for the demo
 
 export const SHIPMENTS = [
@@ -123,6 +125,51 @@ export function computeBoardKpis(shipments, refISO = REF_DATE) {
     dataIssueCount: withIssues.length,
     dataIssueTotal: shipments.reduce((a, s) => a + (s.anomalies || []).length, 0),
   };
+}
+
+/* The single most-urgent next action for a dossier (deterministic), or null if
+   nothing is pending — turns the board's exposure number into a to-do list. */
+export function nextAction(s, sur) {
+  sur = sur || surestarieFor(s);
+  if (s.status === "livré") return null;
+  if (sur.state === "overdue") {
+    const ready = s.status === "dédouané";
+    return {
+      severity: "alert", priority: 1000 + (sur.overdueDays || 0), kind: "surestarie",
+      title: ready ? "Enlèvement urgent — surestaries en cours" : "Débloquer le dédouanement — surestaries en cours",
+      detail: `Franchise dépassée de ${sur.overdueDays} j · ${fmtInt(sur.amount)} MAD`,
+    };
+  }
+  if (s.circuit === "rouge" && s.status === "inspection")
+    return { severity: "warn", priority: 850, kind: "inspection",
+      title: "Suivre la visite douane", detail: "Visite physique en cours — fournir les pièces si demandées" };
+  if (sur.state === "soon")
+    return { severity: "warn", priority: 800 - (sur.daysLeft || 0), kind: "surestarie",
+      title: "Planifier l'enlèvement", detail: `Franchise expire le ${s.freeTimeEndsAt}${sur.daysLeft != null ? ` (${sur.daysLeft} j)` : ""}` };
+  const docFlag = (s.riskFlags || []).find((f) => /manquant|certificat/i.test(f));
+  if (docFlag)
+    return { severity: "warn", priority: 600, kind: "doc", title: "Compléter le dossier", detail: docFlag };
+  if ((s.anomalies || []).length)
+    return { severity: "warn", priority: 500, kind: "data",
+      title: "Corriger la saisie avant dépôt", detail: `${s.anomalies.length} anomalie(s) — quantités / totaux / codes SH` };
+  if (s.undervaluation && s.undervaluation.eluded_mad > 0)
+    return { severity: "warn", priority: 450, kind: "value",
+      title: "Vérifier la valeur déclarée", detail: `Sous-déclaration possible · ~${fmtInt(s.undervaluation.eluded_mad)} MAD de droits & taxes` };
+  if (s.status === "dédouané" && s.freeTimeEndsAt)
+    return { severity: "info", priority: 400, kind: "pickup",
+      title: "Organiser l'enlèvement", detail: `Dédouané — enlever avant le ${s.freeTimeEndsAt}` };
+  return null;
+}
+
+/* Prioritised action queue over the board (most urgent first). */
+export function buildActionQueue(shipments, refISO = REF_DATE) {
+  const items = [];
+  for (const s of shipments) {
+    const a = nextAction(s, s.surestarie || surestarieFor(s, refISO));
+    if (a) items.push({ id: s.id, ref: s.ref, importer: s.importer, ...a });
+  }
+  items.sort((x, y) => y.priority - x.priority);
+  return items;
 }
 
 export const STATUS_STEPS = ["en_route", "arrivé", "sous_douane", "inspection", "dédouané", "livré"];

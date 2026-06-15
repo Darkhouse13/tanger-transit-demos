@@ -4,7 +4,7 @@ import { Eyebrow, Btn, Mono, Section, Field, CircuitChip, Analyzing, DemoNote, u
 import { dirOf } from "./lang.js";
 import { useLocale } from "./Locale.jsx";
 import { t } from "./i18n.js";
-import { mad, fmt, fmtInt } from "../shared/format.js";
+import { mad, fmt, fmtInt, fxInfo } from "../shared/format.js";
 import { INVOICES } from "../data/invoices.js";
 import { TARIFF_NOTE } from "../shared/tariff.js";
 import { enrichDeclaration } from "../shared/enrich.js";
@@ -75,7 +75,7 @@ const circuitName = (c, locale) => {
    little "i" next to each important field — what it is / how we computed it. */
 const FIELD_INFO = {
   origin: "Pays d'origine retenu pour le régime tarifaire (droits préférentiels éventuels). Déduit de l'origine déclarée sur la facture, sinon du pays du vendeur. Une origine préférentielle (UE, Turquie…) exige un certificat d'origine (EUR.1 / A.TR) pour justifier le droit réduit.",
-  cif: "Valeur en douane = valeur facture convertie en MAD + quote-part de fret et d'assurance, répartie entre les lignes au prorata de la valeur (sinon du poids). Selon l'Incoterm, le fret/assurance déjà inclus ne sont pas recomptés (CIF, CFR, CIP, DDP…).",
+  cif: "Valeur en douane = valeur facture convertie en MAD (au cours officiel de la douane du jour) + quote-part de fret et d'assurance, répartie entre les lignes au prorata de la valeur (sinon du poids). Selon l'Incoterm, le fret/assurance déjà inclus ne sont pas recomptés (CIF, CFR, CIP, DDP…).",
   duty: "Droit = valeur CIF × quotité du tarif (selon le code SH). Quotités issues d'une grille de démonstration, remplaçable par le tarif ADIL réel.",
   vat: "TVA = (CIF + droit + TPI) × 20 %. Taux de droit commun à l'importation.",
   tpi: "TPI (taxe parafiscale à l'importation) = CIF × 0,25 %.",
@@ -343,7 +343,8 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
       </Section>
 
       {/* 03 Valeur en douane */}
-      <Section index="03" title={t(locale, "d_sec_value")} revealed={shown(2)}>
+      <Section index="03" title={t(locale, "d_sec_value")} revealed={shown(2)}
+        right={decl.currency && decl.currency !== "MAD" ? <FxNote currency={decl.currency} /> : null}>
         <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }} className="tt-stack">
           <div style={{ background: C.navy, borderRadius: 8, padding: "16px 20px", color: "#FCFBF8", minWidth: 230, flex: "1 1 230px" }}>
             <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9DB0C9" }}>{t(locale, "d_landed_label")}<InfoDot text={FIELD_INFO.landed} /></div>
@@ -447,6 +448,20 @@ function StakeStat({ label, value, sub }) {
         {sub ? <span style={{ fontSize: 11, fontWeight: 600, marginInlineStart: 6, color: "#7A2E22" }}>{sub}</span> : null}
       </div>
     </div>
+  );
+}
+
+/* ---- official daily exchange rate used for the customs-value conversion --- */
+function FxNote({ currency }) {
+  const info = fxInfo(currency);
+  const d = String(info.date || "").split("-");
+  const date = d.length === 3 ? `${d[2]}/${d[1]}/${d[0]}` : info.date;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: C.muted, marginInlineStart: "auto" }}>
+      <Mono style={{ color: C.ink2 }}>1 {currency} = {fmt(info.rate, 4)} MAD</Mono>
+      <span style={{ color: C.faint }}>· cours du {date}</span>
+      <InfoDot text={`Taux de change officiel (cours de la douane / ADII) en vigueur au ${date}. En production il est repris quotidiennement du référentiel ADII ; figé ici pour la démonstration.`} />
+    </span>
   );
 }
 

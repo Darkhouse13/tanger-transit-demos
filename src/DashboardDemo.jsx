@@ -3,7 +3,7 @@ import { C, CIRCUIT } from "./tokens.js";
 import { Eyebrow, Mono, CircuitChip, useCountUp, DemoNote } from "./ui.jsx";
 import { dirOf } from "./lang.js";
 import { fmtInt, fmt } from "../shared/format.js";
-import { SHIPMENTS, surestarieFor, REF_DATE, TIMELINE, computeBoardKpis } from "../data/shipments.js";
+import { SHIPMENTS, surestarieFor, REF_DATE, TIMELINE, computeBoardKpis, buildActionQueue } from "../data/shipments.js";
 import { getTracked, subscribeTracked } from "./trackedStore.js";
 
 const STATUS_LABEL = {
@@ -38,6 +38,11 @@ export function DashboardDemo() {
   const trackedShip = tracked.map((s) => ({ ...s, surestarie: surestarieFor(s) }));
   const shipments = [...trackedShip, ...data.shipments];
   const kpis = computeBoardKpis(shipments);
+  const actions = buildActionQueue(shipments);
+  const openAction = (id) => {
+    setOpen(id);
+    setTimeout(() => { const el = document.getElementById("row-" + id); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 60);
+  };
 
   return (
     <div style={{ animation: "coursFade .4s ease" }}>
@@ -61,6 +66,9 @@ export function DashboardDemo() {
       {/* Money story — what the pre-fill saves, and what's bleeding if untouched */}
       <SavingsBanner kpis={kpis} />
 
+      {/* Action queue — exposure turned into a prioritised to-do list */}
+      <ActionQueue items={actions} onOpen={openAction} />
+
       {/* Table */}
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", background: C.paper }}>
         <div className="cours-scroll" style={{ overflowX: "auto" }}>
@@ -78,7 +86,7 @@ export function DashboardDemo() {
                 const sur = s.surestarie || { state: "n/a", amount: 0, daysLeft: null, overdueDays: 0 };
                 return (
                   <React.Fragment key={s.id}>
-                    <tr onClick={() => setOpen(isOpen ? null : s.id)} style={{ borderTop: `1px solid ${C.border}`, cursor: "pointer", background: isOpen ? C.tint1 : "transparent" }}>
+                    <tr id={"row-" + s.id} onClick={() => setOpen(isOpen ? null : s.id)} style={{ borderTop: `1px solid ${C.border}`, cursor: "pointer", background: isOpen ? C.tint1 : "transparent" }}>
                       <td style={{ padding: "11px 14px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <Mono style={{ fontSize: 12.5, color: C.navy, fontWeight: 500 }}>{s.ref}</Mono>
@@ -110,6 +118,63 @@ export function DashboardDemo() {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+const SEVC = {
+  alert: { fg: "#7A2E22", bg: "#F2DAD5", dot: "#B23B2B", tag: "Urgent" },
+  warn: { fg: "#8A5A12", bg: "#F4E9D2", dot: "#C98A2B", tag: "À traiter" },
+  info: { fg: C.navy, bg: C.tint2, dot: C.navy, tag: "À planifier" },
+};
+
+/* Prioritised action queue — the board's exposure number made actionable.
+   Each row opens (and scrolls to) its dossier in the table below. */
+function ActionQueue({ items, onOpen }) {
+  if (!items.length) {
+    return (
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, background: C.paper, padding: "13px 16px", marginBottom: 18, fontSize: 12.5, color: "#2F5A43" }}>
+        ✓ Aucune action en attente — tous les dossiers sont à jour.
+      </div>
+    );
+  }
+  const shown = items.slice(0, 8);
+  return (
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, background: C.paper, marginBottom: 18, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 16px", borderBottom: `1px solid ${C.border}`, background: C.tint1 }}>
+        <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: C.ink2 }}>Actions prioritaires</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 5, padding: "2px 8px" }}>{items.length}</span>
+        <span style={{ marginInlineStart: "auto", fontSize: 11, color: C.faint }}>triées par urgence</span>
+      </div>
+      <div>
+        {shown.map((a, i) => {
+          const sc = SEVC[a.severity] || SEVC.info;
+          return (
+            <button key={a.id} onClick={() => onOpen(a.id)} style={{
+              display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "start",
+              border: "none", borderTop: i ? `1px solid ${C.border}` : "none", background: "transparent",
+              padding: "11px 16px", cursor: "pointer", transition: "background .14s ease",
+            }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = C.tint1)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+              <span style={{ width: 8, height: 8, borderRadius: 8, background: sc.dot, flexShrink: 0 }} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{a.title}</span>
+                  <Mono style={{ fontSize: 11, color: C.navy }}>{a.ref}</Mono>
+                  <span style={{ fontSize: 11.5, color: C.muted }} dir={dirOf(a.importer)}>{a.importer}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }} dir={dirOf(a.detail)}>{a.detail}</div>
+              </div>
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: sc.fg, background: sc.bg, borderRadius: 5, padding: "3px 8px", whiteSpace: "nowrap" }}>{sc.tag}</span>
+              <span style={{ color: C.faint, fontSize: 15 }}>›</span>
+            </button>
+          );
+        })}
+        {items.length > shown.length && (
+          <div style={{ padding: "9px 16px", borderTop: `1px solid ${C.border}`, fontSize: 11.5, color: C.faint }}>+{items.length - shown.length} autre(s) dossier(s) à traiter</div>
+        )}
       </div>
     </div>
   );

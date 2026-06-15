@@ -3,6 +3,8 @@ import { enrichDeclaration } from "./shared/enrich.js";
 import { computeLanded } from "./shared/landed.js";
 import { rankHs } from "./shared/classify.js";
 import { runPreflight } from "./shared/checks.js";
+import { SHIPMENTS, buildActionQueue } from "./data/shipments.js";
+import { fxInfo } from "./shared/format.js";
 
 let pass = true;
 
@@ -84,6 +86,21 @@ const wantPf = ["QTY_MISMATCH", "DUP_LINE", "TOTAL_MISMATCH", "HS_CLIENT_MISMATC
 const pfOk = pf.flow === "import" && wantPf.every((c) => codes.has(c));
 if (!pfOk) pass = false;
 console.log(`  flow=${pf.flow} fired=[${[...codes].join(", ")}] ${pfOk ? "OK" : "*** MISSING " + wantPf.filter((c) => !codes.has(c)).join(", ") + " ***"}`);
+
+/* 2d — board action queue: non-empty, sorted most-urgent first, alert on top */
+console.log("\nACTION QUEUE:");
+const q = buildActionQueue(SHIPMENTS.map((s) => ({ ...s })));
+const sortedOk = q.every((a, i) => i === 0 || q[i - 1].priority >= a.priority);
+const qOk = q.length > 0 && sortedOk && q[0].severity === "alert";
+if (!qOk) pass = false;
+for (const a of q.slice(0, 4)) console.log(`  ${a.ref}: [${a.severity}] ${a.title} — ${a.detail}`);
+console.log(`  total=${q.length} sorted=${sortedOk} top=${q[0] ? q[0].severity : "—"} ${qOk ? "OK" : "*** ACTION QUEUE ISSUE ***"}`);
+
+/* 2e — official FX rate carries a rate + effective date + ADII source */
+const fi = fxInfo("EUR");
+const fxOk = fi.rate === 10.85 && !!fi.date && /ADII/.test(fi.source);
+if (!fxOk) pass = false;
+console.log(`\nFX: 1 EUR = ${fi.rate} MAD · cours du ${fi.date} · ${fi.source} ${fxOk ? "OK" : "*** FX ISSUE ***"}`);
 
 /* 3 — classifier sanity on a few free-text queries (demo 2) */
 console.log("\nCLASSIFY:");
