@@ -167,6 +167,10 @@ app.setNotFoundHandler((request, reply) => {
 
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });
-} catch {
+  console.log(`[server] à l'écoute sur http://localhost:${PORT}${OFFLINE ? " (DEMO_OFFLINE)" : ""}`);
+} catch (e) {
+  const msg = (e && e.message) || String(e);
+  if (/EADDRINUSE/.test(msg)) console.error(`[server] le port ${PORT} est déjà utilisé — fermez l'autre serveur ou changez PORT.`);
+  else console.error(`[server] démarrage impossible sur le port ${PORT} :`, msg);
   process.exit(1);
 }

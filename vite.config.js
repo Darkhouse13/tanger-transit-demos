@@ -6,10 +6,11 @@ export default defineConfig({
   build: {
     outDir: "dist",
   },
-  // Dev convenience: `npm run dev` (5173) proxies API calls to `npm start` (8080).
+  // Dev convenience: `npm run dev` proxies API calls to the Fastify server
+  // (`npm start`). Respects PORT so it still works when 8080 is taken (e.g. by Apache).
   server: {
     proxy: {
-      "/api": "http://localhost:8080",
+      "/api": `http://localhost:${process.env.PORT || 8080}`,
     },
   },
 });
