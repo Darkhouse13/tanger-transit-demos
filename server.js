@@ -79,7 +79,7 @@ app.post(
         });
         return;
       } else {
-        extracted = await callDeepSeek(EXTRACT_SYSTEM_PROMPT, invoiceText, { maxTokens: 1500 });
+        extracted = await callDeepSeek(EXTRACT_SYSTEM_PROMPT, invoiceText, { maxTokens: 8000 });
         meta = { source: "live" };
       }
       reply.send(enrichDeclaration(extracted, { ...meta, historyFor }));
