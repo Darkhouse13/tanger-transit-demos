@@ -83,8 +83,17 @@ app.post(
         meta = { source: "live" };
       }
       reply.send(enrichDeclaration(extracted, { ...meta, historyFor }));
-    } catch {
-      reply.code(502).send({ error: "Le service d'extraction est indisponible." });
+    } catch (e) {
+      const msg = (e && e.message) || "";
+      console.error("[extract] échec :", msg); // visible dans le terminal `npm start`
+      let clientMsg = "Le service d'extraction est indisponible.";
+      if (/no_api_key/.test(msg)) clientMsg = "Clé DeepSeek absente côté serveur.";
+      else if (/upstream_failed:(401|403)/.test(msg)) clientMsg = "Clé DeepSeek invalide ou expirée.";
+      else if (/upstream_failed:402/.test(msg)) clientMsg = "Solde DeepSeek insuffisant — créditez le compte DeepSeek.";
+      else if (/upstream_failed:429/.test(msg)) clientMsg = "Trop de requêtes DeepSeek — réessayez dans un instant.";
+      else if (/timeout|aborted|fetch failed|ENOTFOUND|ECONNREFUSED|EAI_AGAIN/i.test(msg)) clientMsg = "Service DeepSeek injoignable (réseau ou délai dépassé).";
+      else if (/parser|JSON/i.test(msg)) clientMsg = "Réponse d'extraction illisible — réessayez.";
+      reply.code(502).send({ error: clientMsg });
     }
   }
 );

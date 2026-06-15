@@ -46,6 +46,9 @@ export async function callDeepSeek(systemPrompt, userText, { maxTokens = 1000 } 
     signal: AbortSignal.timeout(30_000),
   });
 
-  if (!upstream.ok) throw new Error("upstream_failed");
+  if (!upstream.ok) {
+    const body = await upstream.text().catch(() => "");
+    throw new Error(`upstream_failed:${upstream.status}:${body.slice(0, 200)}`);
+  }
   return parseDeepSeekJson(await upstream.json());
 }
