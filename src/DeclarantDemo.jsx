@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { C, CIRCUIT } from "./tokens.js";
-import { Eyebrow, Btn, Mono, Section, Field, CircuitChip, Analyzing, DemoNote, useCountUp, grid } from "./ui.jsx";
+import { Eyebrow, Btn, Mono, Section, Field, CircuitChip, Analyzing, DemoNote, useCountUp, grid, InfoDot } from "./ui.jsx";
 import { dirOf } from "./lang.js";
 import { useLocale } from "./Locale.jsx";
 import { t } from "./i18n.js";
@@ -68,6 +68,18 @@ const CIRCUITS = ["vert", "orange", "rouge"];
 const circuitName = (c, locale) => {
   const s = CIRCUIT[c] || CIRCUIT.vert;
   return locale === "ar" ? `المسار ${s.ar}` : `Circuit ${s.label}`;
+};
+
+/* Per-field assumption notes (French, per the client's request). Surfaced by the
+   little "i" next to each important field — what it is / how we computed it. */
+const FIELD_INFO = {
+  origin: "Pays d'origine retenu pour le régime tarifaire (droits préférentiels éventuels). Déduit de l'origine déclarée sur la facture, sinon du pays du vendeur. Une origine préférentielle (UE, Turquie…) exige un certificat d'origine (EUR.1 / A.TR) pour justifier le droit réduit.",
+  cif: "Valeur en douane = valeur facture convertie en MAD + quote-part de fret et d'assurance, répartie entre les lignes au prorata de la valeur (sinon du poids). Selon l'Incoterm, le fret/assurance déjà inclus ne sont pas recomptés (CIF, CFR, CIP, DDP…).",
+  duty: "Droit = valeur CIF × quotité du tarif (selon le code SH). Quotités issues d'une grille de démonstration, remplaçable par le tarif ADIL réel.",
+  vat: "TVA = (CIF + droit + TPI) × 20 %. Taux de droit commun à l'importation.",
+  tpi: "TPI (taxe parafiscale à l'importation) = CIF × 0,25 %.",
+  landed: "Coût de revient dédouané = CIF + droits + TVA + TPI. Ce que la marchandise coûte une fois dédouanée (hors logistique aval).",
+  confidence: "Confiance = écart du score de risque aux seuils de circuit (orange ≥ 12, rouge ≥ 30). Un signal bloquant (sous-évaluation, certificat manquant…) fixe d'office le circuit rouge. C'est une prédiction — pas la réponse réelle de BADR.",
 };
 
 export function DeclarantDemo({ onNavigate }) {
@@ -234,7 +246,7 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
           <Field label={t(locale, "d_f_exporter")} value={seller.name} autoDir missing={!seller.name} hint={seller.country} />
           <Field label={t(locale, "d_f_importer")} value={buyer.name} autoDir missing={!buyer.name} hint={buyer.city} />
           <Field label={t(locale, "d_f_incoterm")} value={header.incoterm} mono missing={!header.incoterm} hint={header.incoterm_place} />
-          <Field label={t(locale, "d_f_origin")} value={decl.origin_country} mono missing={!decl.origin_country} />
+          <Field label={t(locale, "d_f_origin")} value={decl.origin_country} mono missing={!decl.origin_country} info={FIELD_INFO.origin} />
         </div>
         <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
           {[["facture", "d_doc_facture"], ["colisage", "d_doc_colisage"], ["certificat_origine", "d_doc_coo"], ["bl", "d_doc_bl"]].map(([d, key]) => {
@@ -318,7 +330,7 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
       <Section index="03" title={t(locale, "d_sec_value")} revealed={shown(2)}>
         <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }} className="tt-stack">
           <div style={{ background: C.navy, borderRadius: 8, padding: "16px 20px", color: "#FCFBF8", minWidth: 230, flex: "1 1 230px" }}>
-            <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9DB0C9" }}>{t(locale, "d_landed_label")}</div>
+            <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9DB0C9" }}>{t(locale, "d_landed_label")}<InfoDot text={FIELD_INFO.landed} /></div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 6 }}>
               <Mono style={{ fontSize: 32, fontWeight: 500, letterSpacing: "-0.02em" }}>{fmtInt(landedAnim)}</Mono>
               <span style={{ fontSize: 14, color: "#9DB0C9" }}>MAD</span>
@@ -327,10 +339,10 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
           </div>
           <div style={{ flex: "2 1 320px", display: "flex", alignItems: "center" }}>
             <div style={{ ...grid(4), width: "100%" }} className="tt-grid-2">
-              <Field label={t(locale, "d_th_cif")} value={mad(totals.cif_mad)} mono />
-              <Field label={t(locale, "d_f_duty_full")} value={mad(totals.duty_mad)} mono accent />
-              <Field label={t(locale, "d_f_vat_full")} value={mad(totals.vat_mad)} mono />
-              <Field label={t(locale, "d_f_tpi_full")} value={mad(totals.tpi_mad)} mono />
+              <Field label={t(locale, "d_th_cif")} value={mad(totals.cif_mad)} mono info={FIELD_INFO.cif} />
+              <Field label={t(locale, "d_f_duty_full")} value={mad(totals.duty_mad)} mono accent info={FIELD_INFO.duty} />
+              <Field label={t(locale, "d_f_vat_full")} value={mad(totals.vat_mad)} mono info={FIELD_INFO.vat} />
+              <Field label={t(locale, "d_f_tpi_full")} value={mad(totals.tpi_mad)} mono info={FIELD_INFO.tpi} />
             </div>
           </div>
         </div>
@@ -437,7 +449,7 @@ function PredictionCard({ prediction, predicted, locale }) {
         </div>
         <div style={{ textAlign: "end" }}>
           <Mono style={{ fontSize: 20, fontWeight: 600, color: s.fg }}>{conf}%</Mono>
-          <div style={{ fontSize: 10, color: C.faint }}>{t(locale, "d_pred_conf")}</div>
+          <div style={{ fontSize: 10, color: C.faint }}>{t(locale, "d_pred_conf")}<InfoDot text={FIELD_INFO.confidence} /></div>
         </div>
       </div>
       <div style={{ marginTop: 11 }}>

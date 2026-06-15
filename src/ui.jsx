@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { C, CIRCUIT } from "./tokens.js";
 import { dirOf } from "./lang.js";
 import { useLocale } from "./Locale.jsx";
@@ -112,12 +112,59 @@ export function Section({ index, title, revealed = true, children, tint, right }
   );
 }
 
+/* ----------------- per-field info dot (assumption popover) -------------- */
+/* Small "i" next to a field; click reveals a short French note explaining the
+   assumption / computation behind that field. Self-contained popover: closes on
+   a second click, Escape, or a click outside. */
+export function InfoDot({ text, label }) {
+  const [open, setOpen] = useState(false);
+  const [alignEnd, setAlignEnd] = useState(false); // flip leftward near the right edge
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const toggle = () => setOpen((o) => {
+    const next = !o;
+    if (next && ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      setAlignEnd(r.left + 260 > window.innerWidth);
+    }
+    return next;
+  });
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}>
+      <button type="button" onClick={toggle} aria-label={label || "Information"} title={label || "Information"}
+        style={{
+          width: 15, height: 15, marginInlineStart: 5, padding: 0, borderRadius: 8,
+          border: `1px solid ${C.border2}`, background: open ? C.navy : C.paper,
+          color: open ? "#FCFBF8" : C.muted, cursor: "pointer", fontFamily: "var(--serif)",
+          fontSize: 10, fontWeight: 600, lineHeight: 1, letterSpacing: "normal",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+        }}>i</button>
+      {open && (
+        <span dir="ltr" role="tooltip" style={{
+          position: "absolute", top: "calc(100% + 6px)", [alignEnd ? "insetInlineEnd" : "insetInlineStart"]: 0, zIndex: 40,
+          width: 248, maxWidth: "72vw", background: C.page, border: `1px solid ${C.border2}`,
+          borderRadius: 8, boxShadow: "0 10px 30px rgba(0,0,0,0.16)", padding: "10px 12px",
+          fontFamily: "var(--sans)", fontSize: 11.5, lineHeight: 1.5, color: C.ink2,
+          fontWeight: 400, textTransform: "none", letterSpacing: "normal",
+        }}>{text}</span>
+      )}
+    </span>
+  );
+}
+
 /* ------------------------------- field ---------------------------------- */
-export function Field({ label, value, missing, mono, hint, accent, autoDir }) {
+export function Field({ label, value, missing, mono, hint, accent, autoDir, info }) {
   const dir = autoDir && typeof value === "string" ? dirOf(value) : undefined;
   return (
     <div>
-      <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.05em", textTransform: "uppercase", color: C.faint, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.05em", textTransform: "uppercase", color: C.faint, marginBottom: 5 }}>{label}{info ? <InfoDot text={info} /> : null}</div>
       {missing ? <AConfirmer /> : (
         <div dir={dir} style={{
           fontSize: 14, color: accent ? C.navy : C.ink,
