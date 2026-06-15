@@ -27,26 +27,33 @@ export function enrichDeclaration(extracted, meta = {}) {
     const res = resolveHs(desc);
     const cands = [res.best, ...(res.alternates || [])].filter(Boolean);
     const ovCode = overrides[idx];
-    const manual = !!(ovCode && TARIFF_BY_CODE[ovCode]);
-    const best = manual ? TARIFF_BY_CODE[ovCode] : (res.best || {});
-    const code = best.code || null;
+    const inGrid = !!(ovCode && TARIFF_BY_CODE[ovCode]);
+    const offGrid = !!ovCode && !inGrid; // declarant typed a code outside the demo grid
+    const manual = inGrid || offGrid;
+    const best = inGrid ? TARIFF_BY_CODE[ovCode] : (res.best || {});
+    const code = offGrid ? ovCode : (best.code || null);
     return {
       ...ln,
       description: desc,
       hs_code: code,
-      hs_label_fr: best.fr || null,
-      hs_label_ar: best.ar || null,
-      hs_label_en: best.en || null,
-      hs_category: best.category || null,
-      duty: best.duty != null ? best.duty : 0,
+      hs_label_fr: offGrid ? null : (best.fr || null),
+      hs_label_ar: offGrid ? null : (best.ar || null),
+      hs_label_en: offGrid ? null : (best.en || null),
+      hs_category: offGrid ? null : (best.category || null),
+      /* off-grid: no rate row to cost against → 0 with a "taux à confirmer" flag.
+         With the real ADIL tariff plugged in, every valid code resolves normally. */
+      duty: offGrid ? 0 : (best.duty != null ? best.duty : 0),
       vat: best.vat != null ? best.vat : 20,
       tpi: best.tpi != null ? best.tpi : 0.25,
-      sensitive: !!best.sensitive,
-      priceBand: best.priceBand || null,
+      sensitive: offGrid ? false : !!best.sensitive,
+      priceBand: offGrid ? null : (best.priceBand || null),
       confidence: manual ? 1 : res.confidence,
-      needs_review: manual ? false : res.needsReview,
-      classification_reason: manual ? "classement validé manuellement" : res.reason,
+      needs_review: offGrid ? true : (manual ? false : res.needsReview),
+      classification_reason: inGrid ? "classement validé manuellement"
+        : offGrid ? "code saisi manuellement — hors grille de démonstration (taux à confirmer sur l'ADIL)"
+        : res.reason,
       manual_hs: manual,
+      hs_off_grid: offGrid,
       alternates: cands.filter((c) => c.code !== code),
     };
   });

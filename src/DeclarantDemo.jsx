@@ -370,7 +370,8 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
                     <td style={{ padding: "11px 12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <Mono style={{ fontSize: 12.5, color: C.navy }}>{l.hs_code}</Mono>
-                        {l.manual_hs && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>{t(locale, "d_manual")}</span>}
+                        {l.manual_hs && !l.hs_off_grid && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>{t(locale, "d_manual")}</span>}
+                        {l.hs_off_grid && <span style={{ fontSize: 9.5, fontWeight: 600, color: "#8A5A12", background: "#F4E9D2", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" }}>{t(locale, "d_off_grid")}</span>}
                         {l.declared_hs && String(l.declared_hs).replace(/\D/g, "") !== String(l.hs_code || "").replace(/\D/g, "") && (
                           <span title={`${t(locale, "d_hs_client_warn")} : ${l.declared_hs}`} style={{ fontSize: 9.5, fontWeight: 600, color: "#7A2E22", background: "#F2DAD5", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" }}>⚠ {l.declared_hs}</span>
                         )}
@@ -387,8 +388,8 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
                     </td>
                     <td style={{ textAlign: "end", padding: "11px 12px" }}><Mono style={{ fontSize: 12, color: C.ink2 }}>{fmt(l.cif_mad)}</Mono></td>
                     <td style={{ textAlign: "end", padding: "11px 12px" }}>
-                      <Mono style={{ fontSize: 12, color: C.ink }}>{fmt(l.duty_mad)}</Mono>
-                      <div style={{ fontSize: 10, color: C.faint }}>{l.duty} %</div>
+                      <Mono style={{ fontSize: 12, color: C.ink }}>{l.hs_off_grid ? "—" : fmt(l.duty_mad)}</Mono>
+                      <div style={{ fontSize: 10, color: l.hs_off_grid ? "#8A5A12" : C.faint }}>{l.hs_off_grid ? t(locale, "d_to_confirm") : l.duty + " %"}</div>
                     </td>
                     <td style={{ textAlign: "end", padding: "11px 12px" }}><Mono style={{ fontSize: 12, color: C.ink2 }}>{fmt(l.vat_mad)}</Mono></td>
                     <td style={{ textAlign: "end", padding: "11px 12px" }}><Mono style={{ fontSize: 12.5, color: C.ink, fontWeight: 600 }}>{fmt(l.landed_cost_mad)}</Mono></td>
@@ -777,6 +778,10 @@ function HsExplain({ line, onPick, onReset }) {
   const { locale } = useLocale();
   const alts = line.alternates || [];
   const label = (a) => (locale === "ar" ? a.ar || a.fr : a.fr);
+  const [manualCode, setManualCode] = useState("");
+  const norm = manualCode.replace(/\D/g, "");
+  const validCode = norm.length >= 6 && norm.length <= 10;
+  const submitCode = () => { if (validCode) { onPick(norm); setManualCode(""); } };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 12, color: C.ink2 }}>
@@ -807,6 +812,18 @@ function HsExplain({ line, onPick, onReset }) {
           </div>
         </div>
       )}
+      <div>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.faint, marginBottom: 6 }}>
+          {t(locale, "d_manual_code_label")}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input value={manualCode} onChange={(e) => setManualCode(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submitCode(); }}
+            placeholder={t(locale, "d_manual_code_ph")} inputMode="numeric" dir="ltr"
+            style={{ border: `1px solid ${C.border2}`, borderRadius: 7, padding: "7px 11px", fontFamily: "var(--mono)", fontSize: 13, letterSpacing: "0.06em", color: C.ink, background: C.paper, width: 168, outline: "none" }} />
+          <Btn disabled={!validCode} onClick={submitCode} style={{ padding: "8px 14px", fontSize: 12.5 }}>{t(locale, "d_manual_code_btn")}</Btn>
+          {norm.length > 0 && !validCode && <span style={{ fontSize: 11, color: "#8A5A12" }}>{t(locale, "d_manual_code_len")}</span>}
+        </div>
+      </div>
       {onReset && (
         <button onClick={onReset} style={{ alignSelf: "flex-start", border: "none", background: "transparent", padding: 0, cursor: "pointer", fontSize: 11, color: C.navy, fontFamily: "var(--sans)" }}>
           {t(locale, "d_reset_auto")}
