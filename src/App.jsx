@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { C } from "./tokens.js";
 import { useLocale, LangChip } from "./Locale.jsx";
 import { t } from "./i18n.js";
+import { InfoHelp } from "./InfoHelp.jsx";
 import { DeclarantDemo } from "./DeclarantDemo.jsx";
 import { CalculatorDemo } from "./CalculatorDemo.jsx";
 import { DashboardDemo } from "./DashboardDemo.jsx";
@@ -56,7 +57,10 @@ export default function App() {
             })}
           </nav>
 
-          <LangChip />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <InfoHelp tab={tab} />
+            <LangChip />
+          </div>
         </div>
       </header>
 
