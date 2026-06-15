@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { C } from "./tokens.js";
+import { C, CIRCUIT } from "./tokens.js";
 import { Eyebrow, Btn, Mono, Section, Field, CircuitChip, Analyzing, DemoNote, useCountUp, grid } from "./ui.jsx";
 import { dirOf } from "./lang.js";
 import { useLocale } from "./Locale.jsx";
@@ -38,6 +38,12 @@ const SEV_STYLE = {
   high: { fg: "#7A2E22", bg: "#F2DAD5" },
   medium: { fg: "#8A5A12", bg: "#F4E9D2" },
   low: { fg: "#3A3D40", bg: "#ECE7DC" },
+};
+
+const CIRCUITS = ["vert", "orange", "rouge"];
+const circuitName = (c, locale) => {
+  const s = CIRCUIT[c] || CIRCUIT.vert;
+  return locale === "ar" ? `المسار ${s.ar}` : `Circuit ${s.label}`;
 };
 
 export function DeclarantDemo({ onNavigate }) {
@@ -143,7 +149,10 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
   const [decl, setDecl] = useState(initialDecl);
   const [overrides, setOverrides] = useState({});
   const [openLine, setOpenLine] = useState(null);
-  useEffect(() => { setDecl(initialDecl); setOverrides({}); setOpenLine(null); }, [initialDecl]);
+  /* What BADR REALLY assigned, once the declarant confirms/corrects our
+     prediction. null = not yet verified → the prediction stands. */
+  const [actual, setActual] = useState(null);
+  useEffect(() => { setDecl(initialDecl); setOverrides({}); setOpenLine(null); setActual(null); }, [initialDecl]);
 
   function reclassify(idx, code) {
     const next = { ...overrides };
@@ -151,7 +160,13 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
     setOverrides(next);
     setDecl(recompute(initialDecl, next));
     setOpenLine(null);
+    setActual(null); // reclassifying changes the prediction → re-verify
   }
+
+  /* The prediction is the engine's circuit; the EFFECTIVE circuit (header chip,
+     tracked dossier, board) is what BADR actually said once verified. */
+  const predicted = (decl.prediction && decl.prediction.predicted) || decl.risk.circuit;
+  const effective = actual || predicted;
 
   const totals = decl.totals;
   const header = decl.header || {};
@@ -183,8 +198,8 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <CircuitChip circuit={decl.risk.circuit} big />
-          <Btn onClick={() => { addTracked(dossierFromDecl(decl)); if (onNavigate) onNavigate("board"); }}>{t(locale, "d_track_btn")}</Btn>
+          <CircuitChip circuit={effective} big />
+          <Btn onClick={() => { addTracked(dossierFromDecl(decl, actual)); if (onNavigate) onNavigate("board"); }}>{t(locale, "d_track_btn")}</Btn>
           <Btn variant="ghost" onClick={onBack}>{t(locale, "d_back_btn")}</Btn>
         </div>
       </div>
@@ -297,10 +312,12 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
         </div>
       </Section>
 
-      {/* 04 Risque */}
-      <Section index="04" title={t(locale, "d_sec_risk")} revealed={shown(3)}
-        tint={decl.risk.circuit === "vert" ? undefined : (decl.risk.circuit === "rouge" ? "#F2DAD5" : "#F4E9D2")}
-        right={<CircuitChip circuit={decl.risk.circuit} />}>
+      {/* 04 Prédiction BADR + vérification */}
+      <Section index="04" title={t(locale, "d_sec_risk_pred")} revealed={shown(3)}
+        tint={effective === "vert" ? undefined : (effective === "rouge" ? "#F2DAD5" : "#F4E9D2")}
+        right={<CircuitChip circuit={effective} />}>
+        <PredictionCard prediction={decl.prediction} predicted={predicted} locale={locale} />
+
         {decl.undervaluation && <StakeCallout u={decl.undervaluation} locale={locale} />}
         {histConfirm.length > 0 && (
           <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "#2F5A43", background: "#DCE5DD", border: `1px solid ${C.border}`, borderRadius: 7, padding: "9px 12px", marginBottom: decl.risk.flags.length ? 8 : 0 }}>
@@ -325,6 +342,9 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
             })}
           </div>
         )}
+
+        <Remediation items={decl.remediation} locale={locale} />
+        <VerifyBadr predicted={predicted} actual={actual} onSet={setActual} locale={locale} />
       </Section>
 
       {/* 05 DUM document */}
@@ -368,6 +388,119 @@ function StakeStat({ label, value, sub }) {
         <span style={{ fontSize: 11, color: "#8A4034" }}> MAD</span>
         {sub ? <span style={{ fontSize: 11, fontWeight: 600, marginInlineStart: 6, color: "#7A2E22" }}>{sub}</span> : null}
       </div>
+    </div>
+  );
+}
+
+/* ----------------------- BADR prediction card --------------------------- */
+function PredictionCard({ prediction, predicted, locale }) {
+  const p = prediction || { confidence: 1, distribution: {}, forced: false };
+  const conf = Math.round((p.confidence || 0) * 100);
+  const dist = p.distribution || {};
+  const s = CIRCUIT[predicted] || CIRCUIT.vert;
+  return (
+    <div style={{ border: `1px solid ${C.border2}`, background: C.paper, borderRadius: 8, padding: "13px 15px", marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.05em", textTransform: "uppercase", color: C.faint }}>{t(locale, "d_pred_label")}</span>
+          <CircuitChip circuit={predicted} big />
+          {p.forced && <span style={{ fontSize: 9.5, fontWeight: 600, color: "#7A2E22", background: "#F2DAD5", borderRadius: 5, padding: "2px 7px" }}>{t(locale, "d_pred_forced")}</span>}
+        </div>
+        <div style={{ textAlign: "end" }}>
+          <Mono style={{ fontSize: 20, fontWeight: 600, color: s.fg }}>{conf}%</Mono>
+          <div style={{ fontSize: 10, color: C.faint }}>{t(locale, "d_pred_conf")}</div>
+        </div>
+      </div>
+      <div style={{ marginTop: 11 }}>
+        <div style={{ display: "flex", height: 8, borderRadius: 5, overflow: "hidden", background: C.tint2 }}>
+          {CIRCUITS.map((c) => {
+            const w = Math.round((dist[c] || 0) * 100);
+            return w ? <span key={c} title={`${circuitName(c, locale)} ${w}%`} style={{ width: `${w}%`, background: CIRCUIT[c].dot }} /> : null;
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 14, marginTop: 7, flexWrap: "wrap" }}>
+          {CIRCUITS.map((c) => (
+            <span key={c} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: C.muted }}>
+              <span style={{ width: 7, height: 7, borderRadius: 7, background: CIRCUIT[c].dot }} />
+              {locale === "ar" ? CIRCUIT[c].ar : CIRCUIT[c].label} <Mono style={{ color: C.ink2 }}>{Math.round((dist[c] || 0) * 100)}%</Mono>
+            </span>
+          ))}
+        </div>
+      </div>
+      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 9 }} dir={locale === "ar" ? "rtl" : "ltr"}>{t(locale, "d_hint_" + predicted)}</div>
+      <DemoNote style={{ marginTop: 8 }}>{t(locale, "d_pred_disclaimer")}</DemoNote>
+    </div>
+  );
+}
+
+/* ---------------- what needs to be done (remediation) ------------------- */
+function Remediation({ items, locale }) {
+  const list = items || [];
+  return (
+    <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: C.ink2, marginBottom: 9 }}>{t(locale, "d_todo_title")}</div>
+      {list.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: "#2F5A43", background: "#DCE5DD", border: `1px solid ${C.border}`, borderRadius: 7, padding: "9px 12px" }}>
+          ✓ {t(locale, "d_todo_none")}
+        </div>
+      ) : (
+        <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 7 }}>
+          {list.map((r, i) => {
+            const st = SEV_STYLE[r.severity] || SEV_STYLE.low;
+            const text = locale === "ar" ? r.ar : r.fr;
+            return (
+              <li key={r.code} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 12.5, color: C.ink2, background: C.page, border: `1px solid ${C.border}`, borderRadius: 7, padding: "10px 12px" }}>
+                <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: 9, background: st.bg, color: st.fg, fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--mono)", marginTop: 1 }}>{i + 1}</span>
+                <span dir={dirOf(text)} style={{ lineHeight: 1.5 }}>{text}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+/* -------- verify against BADR: confirm or correct our prediction -------- */
+function VerifyBadr({ predicted, actual, onSet, locale }) {
+  const match = actual && actual === predicted;
+  const rtl = locale === "ar";
+  return (
+    <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: C.ink2, marginBottom: 4 }}>{t(locale, "d_verify_title")}</div>
+      <p style={{ fontSize: 12.5, color: C.muted, margin: "0 0 11px", lineHeight: 1.5, maxWidth: 640 }} dir={rtl ? "rtl" : "ltr"}>{t(locale, "d_verify_prompt")}</p>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {CIRCUITS.map((c) => {
+          const s = CIRCUIT[c];
+          const sel = actual === c;
+          return (
+            <button key={c} onClick={() => onSet(sel ? null : c)} style={{
+              display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer",
+              border: sel ? `1.5px solid ${s.dot}` : `1px solid ${C.border2}`,
+              background: sel ? s.bg : C.paper, color: sel ? s.fg : C.ink2,
+              borderRadius: 8, padding: "8px 13px", fontFamily: "var(--sans)", fontSize: 13, fontWeight: 500,
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: 8, background: s.dot }} />
+              {rtl ? `المسار ${s.ar}` : `Circuit ${s.label}`}
+              {predicted === c && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>{t(locale, "d_verify_predicted")}</span>}
+            </button>
+          );
+        })}
+        {actual && (
+          <button onClick={() => onSet(null)} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 11.5, color: C.navy, fontFamily: "var(--sans)" }}>{t(locale, "d_verify_reset")}</button>
+        )}
+      </div>
+      {actual && (
+        <div dir={rtl ? "rtl" : "ltr"} style={{ marginTop: 11, display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, borderRadius: 7, padding: "10px 12px",
+          color: match ? "#2F5A43" : "#8A5A12", background: match ? "#DCE5DD" : "#F4E9D2", border: `1px solid ${C.border}` }}>
+          <span style={{ marginTop: 1 }}>{match ? "✓" : "↺"}</span>
+          <span style={{ lineHeight: 1.5 }}>
+            <strong>{match ? t(locale, "d_verify_confirmed") : t(locale, "d_verify_corrected")}</strong>
+            {" — "}{t(locale, "d_verify_assigned")} {circuitName(actual, locale)}
+            {!match && <> ({t(locale, "d_verify_we_predicted")} {circuitName(predicted, locale)}). {t(locale, "d_verify_realwins")}</>}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -29,6 +29,17 @@ for (const inv of INVOICES) {
   console.log(`      landed=${d.totals.landed_cost_mad} MAD · duty=${d.totals.duty_mad} · vat=${d.totals.vat_mad}`);
   console.log(`      HS: ${codes}`);
   console.log(`      flags: ${d.risk.flags.map((f) => f.code).join(", ") || "—"}`);
+
+  /* BADR prediction must agree with the risk circuit, carry a sane confidence,
+     and a normalised likelihood; every flag should yield an action (or none). */
+  const p = d.prediction || {};
+  const distSum = ["vert", "orange", "rouge"].reduce((a, c) => a + ((p.distribution || {})[c] || 0), 0);
+  const predOk = p.predicted === d.risk.circuit
+    && p.confidence > 0 && p.confidence <= 1
+    && Math.abs(distSum - 1) < 0.05
+    && (d.remediation || []).length <= d.risk.flags.length;
+  if (!predOk) pass = false;
+  console.log(`      BADR: predicted=${p.predicted} conf=${Math.round((p.confidence || 0) * 100)}% Σ=${distSum.toFixed(2)} todo=${(d.remediation || []).length} ${predOk ? "OK" : "*** PREDICTION MISMATCH ***"}`);
 }
 
 /* 3 — classifier sanity on a few free-text queries (demo 2) */

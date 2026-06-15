@@ -25,14 +25,18 @@ function addDays(iso, n) {
 }
 
 /* Shape a finished declaration into a board dossier (same fields as the
-   synthetic shipments, so the board renders it with no special-casing). */
-export function dossierFromDecl(decl) {
+   synthetic shipments, so the board renders it with no special-casing).
+   `actualCircuit` is what BADR really assigned once the declarant verified our
+   prediction (null = not verified → the prediction stands as the circuit). */
+export function dossierFromDecl(decl, actualCircuit = null) {
   const header = decl.header || {};
   const buyer = header.buyer || {};
   const seller = header.seller || {};
   const l0 = (decl.lines || [])[0] || {};
   const freeTimeDays = 5;
   const ref = "DUM-2026-" + String(1000 + Math.floor((decl.totals.landed_cost_mad % 9000))).padStart(5, "0");
+  const predicted = (decl.prediction && decl.prediction.predicted) || decl.risk.circuit;
+  const circuit = actualCircuit || predicted; // reality wins once verified
   return {
     id: "t-" + ref,
     ref,
@@ -42,8 +46,10 @@ export function dossierFromDecl(decl) {
     goods: l0.hs_label_fr || l0.description || "—",
     hsCode: l0.hs_code || "—",
     mode: "mer",
-    circuit: decl.risk.circuit,
-    status: decl.risk.circuit === "rouge" ? "inspection" : "sous_douane",
+    circuit,
+    predictedCircuit: predicted,
+    badrConfirmed: actualCircuit != null, // the declarant checked BADR's real answer
+    status: circuit === "rouge" ? "inspection" : "sous_douane",
     eta: REF_DATE,
     arrivedAt: REF_DATE,
     freeTimeDays,

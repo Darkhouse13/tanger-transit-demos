@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { C } from "./tokens.js";
+import { C, CIRCUIT } from "./tokens.js";
 import { Eyebrow, Mono, CircuitChip, useCountUp, DemoNote } from "./ui.jsx";
 import { dirOf } from "./lang.js";
 import { fmtInt, fmt } from "../shared/format.js";
@@ -90,7 +90,10 @@ export function DashboardDemo() {
                       <td style={{ padding: "11px 14px", fontSize: 12, color: C.muted, maxWidth: 190 }} dir={dirOf(s.goods)}>{s.goods}</td>
                       <td style={{ padding: "11px 14px", fontSize: 12 }}><Mono style={{ color: C.ink2 }}>{s.origin}</Mono></td>
                       <td style={{ padding: "11px 14px", fontSize: 12, color: C.muted }}>{MODE_LABEL[s.mode] || s.mode}</td>
-                      <td style={{ padding: "11px 14px" }}><CircuitChip circuit={s.circuit} /></td>
+                      <td style={{ padding: "11px 14px" }}>
+                        <CircuitChip circuit={s.circuit} />
+                        <CircuitPrediction s={s} />
+                      </td>
                       <td style={{ padding: "11px 14px", fontSize: 12, color: C.ink2 }}>{STATUS_LABEL[s.status] || s.status}</td>
                       <td style={{ padding: "11px 14px", textAlign: "end" }}><SurestarieCell sur={sur} daily={s.dailySurestarie} /></td>
                     </tr>
@@ -141,8 +144,27 @@ function SavingsBanner({ kpis }) {
           </div>
         </div>
       )}
+      {kpis.predictionAccuracy != null && (
+        <div style={{ flex: "1 1 280px", display: "flex", alignItems: "center", gap: 13, background: C.paper, borderRadius: 8, padding: "14px 18px", border: `1px solid ${C.border}` }}>
+          <Mono style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em", color: C.navy }}>{kpis.predictionAccuracy}%</Mono>
+          <div style={{ fontSize: 12.5, lineHeight: 1.4, color: C.ink2 }}>
+            de <span style={{ fontWeight: 500 }}>prédictions BADR justes</span> ({kpis.predictionHits}/{kpis.predictionTotal} dossiers)<br />
+            {kpis.predictionMisses} circuit(s) corrigé(s) après vérification
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/* Predicted-vs-actual marker under a circuit chip — the verify/override story
+   made visible on the board. Amber when BADR contradicted our prediction. */
+function CircuitPrediction({ s }) {
+  if (!s.predictedCircuit) return null;
+  const miss = s.predictedCircuit !== s.circuit;
+  const predName = (CIRCUIT[s.predictedCircuit] || {}).label || s.predictedCircuit;
+  if (miss) return <div style={{ fontSize: 10, color: "#8A5A12", marginTop: 3 }}>↺ prédit : {predName}</div>;
+  return <div style={{ fontSize: 10, color: "#2F5A43", marginTop: 3 }}>{s.badrConfirmed ? "BADR ✓" : "✓ prédit juste"}</div>;
 }
 
 function Kpi({ label, value, money, tone }) {
@@ -193,6 +215,14 @@ function Timeline({ shipment, sur }) {
         <span>ETA : <Mono style={{ color: C.ink2 }}>{shipment.eta}</Mono></span>
         {shipment.freeTimeEndsAt && <span>Franchise jusqu'au : <Mono style={{ color: C.ink2 }}>{shipment.freeTimeEndsAt}</Mono></span>}
         <span>Valeur déclarée : <Mono style={{ color: C.ink2 }}>{fmtInt(shipment.declaredValueMad)} MAD</Mono></span>
+        {shipment.predictedCircuit && (() => {
+          const ok = shipment.predictedCircuit === shipment.circuit;
+          const lbl = (c) => (CIRCUIT[c] || {}).label || c;
+          return (
+            <span>Prédiction BADR : <span style={{ color: ok ? "#2F5A43" : "#8A5A12" }}>{lbl(shipment.predictedCircuit)}</span>
+              {ok ? " · confirmée" : <> · corrigée → <span style={{ color: C.ink2 }}>{lbl(shipment.circuit)}</span></>}</span>
+          );
+        })()}
       </div>
       {shipment.riskFlags && shipment.riskFlags.length > 0 && (
         <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 7 }}>

@@ -9,6 +9,7 @@
 import { resolveHs } from "./classify.js";
 import { computeLanded } from "./landed.js";
 import { assessRisk } from "./risk.js";
+import { predictBadr, remediationFor } from "./badr.js";
 import { TARIFF_BY_CODE } from "./tariff.js";
 
 export function enrichDeclaration(extracted, meta = {}) {
@@ -95,6 +96,12 @@ export function enrichDeclaration(extracted, meta = {}) {
 
   const risk = assessRisk({ lines: withHistory, origin_country, coo_present, importer_known });
 
+  /* 3b — frame the circuit as a BADR PREDICTION (confidence + likelihood) and
+     turn every risk flag into a concrete remediation action ("à faire"). Both
+     are deterministic functions of the risk result — no LLM, no random. */
+  const prediction = predictBadr(risk);
+  const remediation = remediationFor(risk.flags);
+
   /* 4 — money at stake: for lines undervalued vs the importer's own history,
      quantify the under-declared customs value and the duty+VAT+TPI it would
      escape. Deterministic — the gap is run through the SAME landed engine
@@ -129,6 +136,8 @@ export function enrichDeclaration(extracted, meta = {}) {
     lines: withHistory,
     totals,
     risk,
+    prediction,
+    remediation,
     undervaluation,
     coo_present,
     origin_country,
