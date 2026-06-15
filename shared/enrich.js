@@ -27,33 +27,39 @@ export function enrichDeclaration(extracted, meta = {}) {
     const res = resolveHs(desc);
     const cands = [res.best, ...(res.alternates || [])].filter(Boolean);
     const ovCode = overrides[idx];
+    const adiiRow = (meta.hsResolved || {})[idx]; // {code, designation, droit, unite} from the ADII nomenclature
     const inGrid = !!(ovCode && TARIFF_BY_CODE[ovCode]);
-    const offGrid = !!ovCode && !inGrid; // declarant typed a code outside the demo grid
-    const manual = inGrid || offGrid;
+    const isAdii = !!ovCode && !inGrid && !!adiiRow && String(adiiRow.code) === String(ovCode);
+    const offGrid = !!ovCode && !inGrid && !isAdii; // typed code, unknown to grid AND nomenclature
+    const manual = inGrid || isAdii || offGrid;
     const best = inGrid ? TARIFF_BY_CODE[ovCode] : (res.best || {});
-    const code = offGrid ? ovCode : (best.code || null);
+    const code = (isAdii || offGrid) ? ovCode : (best.code || null);
+    const adiiDuty = isAdii && adiiRow.droit != null ? adiiRow.droit : null;
+    const rateUnconfirmed = offGrid || (isAdii && adiiDuty == null); // duty not authoritative → "à confirmer"
     return {
       ...ln,
       description: desc,
       hs_code: code,
-      hs_label_fr: offGrid ? null : (best.fr || null),
-      hs_label_ar: offGrid ? null : (best.ar || null),
-      hs_label_en: offGrid ? null : (best.en || null),
-      hs_category: offGrid ? null : (best.category || null),
-      /* off-grid: no rate row to cost against → 0 with a "taux à confirmer" flag.
-         With the real ADIL tariff plugged in, every valid code resolves normally. */
-      duty: offGrid ? 0 : (best.duty != null ? best.duty : 0),
+      hs_label_fr: inGrid ? (best.fr || null) : isAdii ? (adiiRow.designation || null) : offGrid ? null : (best.fr || null),
+      hs_label_ar: (isAdii || offGrid) ? null : (best.ar || null),
+      hs_label_en: (isAdii || offGrid) ? null : (best.en || null),
+      hs_category: (isAdii || offGrid) ? null : (best.category || null),
+      /* in-grid → grid rate; ADII → its droit when known (else 0, flagged);
+         off-grid → 0, flagged. With the full ADIL tariff every code resolves. */
+      duty: inGrid ? (best.duty != null ? best.duty : 0) : isAdii ? (adiiDuty != null ? adiiDuty : 0) : offGrid ? 0 : (best.duty != null ? best.duty : 0),
       vat: best.vat != null ? best.vat : 20,
       tpi: best.tpi != null ? best.tpi : 0.25,
-      sensitive: offGrid ? false : !!best.sensitive,
-      priceBand: offGrid ? null : (best.priceBand || null),
+      sensitive: (isAdii || offGrid) ? false : !!best.sensitive,
+      priceBand: (isAdii || offGrid) ? null : (best.priceBand || null),
       confidence: manual ? 1 : res.confidence,
-      needs_review: offGrid ? true : (manual ? false : res.needsReview),
+      needs_review: rateUnconfirmed ? true : (manual ? false : res.needsReview),
       classification_reason: inGrid ? "classement validé manuellement"
-        : offGrid ? "code saisi manuellement — hors grille de démonstration (taux à confirmer sur l'ADIL)"
+        : isAdii ? `code ADII — ${adiiRow.designation || code}${adiiDuty == null ? " (droit à confirmer sur l'ADIL)" : ""}`
+        : offGrid ? "code saisi manuellement — hors nomenclature (taux à confirmer sur l'ADIL)"
         : res.reason,
       manual_hs: manual,
-      hs_off_grid: offGrid,
+      hs_off_grid: rateUnconfirmed,
+      hs_source: inGrid ? "grid" : isAdii ? "adii" : offGrid ? "manual" : "auto",
       alternates: cands.filter((c) => c.code !== code),
     };
   });

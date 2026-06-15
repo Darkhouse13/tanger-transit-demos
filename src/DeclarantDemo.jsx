@@ -39,7 +39,7 @@ function downloadJson(filename, obj) {
 /* Re-run the SAME deterministic engine in the browser with a manual HS override
    — instant, offline-proof. Raw line fields survive on the enriched decl, so we
    reconstruct the extracted payload from it and let enrich recompute everything. */
-function recompute(decl, hsOverrides) {
+function recompute(decl, hsOverrides, hsResolved) {
   const extracted = {
     header: decl.header,
     lines: (decl.lines || []).map((l) => ({
@@ -56,6 +56,7 @@ function recompute(decl, hsOverrides) {
     importer_known: decl.importer_known,
     source: decl.source,
     hsOverrides,
+    hsResolved,
     historyFor,
   });
 }
@@ -257,17 +258,23 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
   const { locale } = useLocale();
   const [decl, setDecl] = useState(initialDecl);
   const [overrides, setOverrides] = useState({});
+  const [resolved, setResolved] = useState({}); // idx → ADII row {code, designation, droit, unite}
   const [openLine, setOpenLine] = useState(null);
   /* What BADR REALLY assigned, once the declarant confirms/corrects our
      prediction. null = not yet verified → the prediction stands. */
   const [actual, setActual] = useState(null);
-  useEffect(() => { setDecl(initialDecl); setOverrides({}); setOpenLine(null); setActual(null); }, [initialDecl]);
+  useEffect(() => { setDecl(initialDecl); setOverrides({}); setResolved({}); setOpenLine(null); setActual(null); }, [initialDecl]);
 
-  function reclassify(idx, code) {
-    const next = { ...overrides };
-    if (code == null) delete next[idx]; else next[idx] = code;
-    setOverrides(next);
-    setDecl(recompute(initialDecl, next));
+  function reclassify(idx, code, row) {
+    const nextO = { ...overrides }, nextR = { ...resolved };
+    if (code == null) { delete nextO[idx]; delete nextR[idx]; }
+    else {
+      nextO[idx] = code;
+      if (row) nextR[idx] = { code: row.code, designation: row.designation, droit: row.droit, unite: row.unite };
+      else delete nextR[idx];
+    }
+    setOverrides(nextO); setResolved(nextR);
+    setDecl(recompute(initialDecl, nextO, nextR));
     setOpenLine(null);
     setActual(null); // reclassifying changes the prediction → re-verify
   }
@@ -370,8 +377,9 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
                     <td style={{ padding: "11px 12px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <Mono style={{ fontSize: 12.5, color: C.navy }}>{l.hs_code}</Mono>
-                        {l.manual_hs && !l.hs_off_grid && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>{t(locale, "d_manual")}</span>}
-                        {l.hs_off_grid && <span style={{ fontSize: 9.5, fontWeight: 600, color: "#8A5A12", background: "#F4E9D2", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" }}>{t(locale, "d_off_grid")}</span>}
+                        {l.hs_source === "grid" && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>{t(locale, "d_manual")}</span>}
+                        {l.hs_source === "adii" && <span title={l.hs_label_fr || ""} style={{ fontSize: 9.5, fontWeight: 600, color: "#2F5A43", background: "#DCE5DD", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" }}>{t(locale, "d_adii")}</span>}
+                        {l.hs_source === "manual" && <span style={{ fontSize: 9.5, fontWeight: 600, color: "#8A5A12", background: "#F4E9D2", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" }}>{t(locale, "d_off_grid")}</span>}
                         {l.declared_hs && String(l.declared_hs).replace(/\D/g, "") !== String(l.hs_code || "").replace(/\D/g, "") && (
                           <span title={`${t(locale, "d_hs_client_warn")} : ${l.declared_hs}`} style={{ fontSize: 9.5, fontWeight: 600, color: "#7A2E22", background: "#F2DAD5", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" }}>⚠ {l.declared_hs}</span>
                         )}
@@ -397,7 +405,7 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
                   {isOpen && (
                     <tr>
                       <td colSpan={6} style={{ background: C.page, padding: "13px 14px", borderTop: `1px solid ${C.border}` }}>
-                        <HsExplain line={l} onPick={(code) => reclassify(i, code)} onReset={l.manual_hs ? () => reclassify(i, null) : null} />
+                        <HsExplain line={l} onPick={(code, row) => reclassify(i, code, row)} onReset={l.manual_hs ? () => reclassify(i, null) : null} />
                       </td>
                     </tr>
                   )}
@@ -779,9 +787,32 @@ function HsExplain({ line, onPick, onReset }) {
   const alts = line.alternates || [];
   const label = (a) => (locale === "ar" ? a.ar || a.fr : a.fr);
   const [manualCode, setManualCode] = useState("");
+  const [sugs, setSugs] = useState([]);
+  const [searching, setSearching] = useState(false);
   const norm = manualCode.replace(/\D/g, "");
   const validCode = norm.length >= 6 && norm.length <= 10;
-  const submitCode = () => { if (validCode) { onPick(norm); setManualCode(""); } };
+
+  /* Autocomplete against the real ADII nomenclature (server lookup). */
+  useEffect(() => {
+    if (norm.length < 4) { setSugs([]); setSearching(false); return; }
+    let alive = true; setSearching(true);
+    const tmr = setTimeout(() => {
+      fetch(`/api/hs?q=${encodeURIComponent(norm)}`)
+        .then((r) => (r.ok ? r.json() : { results: [] }))
+        .then((d) => { if (alive) { setSugs(d.results || []); setSearching(false); } })
+        .catch(() => { if (alive) { setSugs([]); setSearching(false); } });
+    }, 220);
+    return () => { alive = false; clearTimeout(tmr); };
+  }, [norm]);
+
+  const applyCode = (code, row) => { onPick(code, row || null); setManualCode(""); setSugs([]); };
+  const submitCode = () => {
+    if (!validCode) return;
+    fetch(`/api/hs?code=${norm}`)
+      .then((r) => (r.ok ? r.json() : { found: false }))
+      .then((d) => applyCode(norm, d && d.found ? d.match : null))
+      .catch(() => applyCode(norm, null));
+  };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 12, color: C.ink2 }}>
@@ -821,8 +852,33 @@ function HsExplain({ line, onPick, onReset }) {
             placeholder={t(locale, "d_manual_code_ph")} inputMode="numeric" dir="ltr"
             style={{ border: `1px solid ${C.border2}`, borderRadius: 7, padding: "7px 11px", fontFamily: "var(--mono)", fontSize: 13, letterSpacing: "0.06em", color: C.ink, background: C.paper, width: 168, outline: "none" }} />
           <Btn disabled={!validCode} onClick={submitCode} style={{ padding: "8px 14px", fontSize: 12.5 }}>{t(locale, "d_manual_code_btn")}</Btn>
-          {norm.length > 0 && !validCode && <span style={{ fontSize: 11, color: "#8A5A12" }}>{t(locale, "d_manual_code_len")}</span>}
+          {norm.length > 0 && norm.length < 4 && <span style={{ fontSize: 11, color: "#8A5A12" }}>{t(locale, "d_manual_code_len")}</span>}
         </div>
+        {(searching || sugs.length > 0 || (norm.length >= 4 && !searching)) && (
+          <div style={{ marginTop: 8 }}>
+            {searching && <div style={{ fontSize: 11, color: C.faint }}>{t(locale, "d_hs_searching")}</div>}
+            {!searching && sugs.length === 0 && norm.length >= 4 && <div style={{ fontSize: 11, color: "#8A5A12" }}>{t(locale, "d_hs_nomatch")}</div>}
+            {sugs.length > 0 && (
+              <>
+                <div style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.04em", textTransform: "uppercase", color: C.faint, marginBottom: 5 }}>{t(locale, "d_hs_suggest")}</div>
+                <div className="cours-scroll" style={{ display: "flex", flexDirection: "column", maxHeight: 196, overflow: "auto", border: `1px solid ${C.border}`, borderRadius: 7, background: C.paper }}>
+                  {sugs.map((s, i) => (
+                    <button key={s.code} onClick={() => applyCode(s.code, s)} style={{
+                      display: "flex", gap: 9, alignItems: "baseline", textAlign: "start", border: "none",
+                      borderTop: i ? `1px solid ${C.border}` : "none", background: "transparent", padding: "7px 11px", cursor: "pointer",
+                    }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = C.tint1)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                      <Mono style={{ fontSize: 12, color: C.navy, fontWeight: 600, whiteSpace: "nowrap" }}>{s.code}</Mono>
+                      <span dir={dirOf(s.designation || "")} style={{ fontSize: 11.5, color: C.muted, flex: 1, lineHeight: 1.35, minWidth: 0 }}>{s.designation}</span>
+                      {s.droit != null && <span style={{ fontSize: 10.5, color: C.ink2, whiteSpace: "nowrap" }}>{t(locale, "d_duty_word")} {s.droit} %</span>}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {onReset && (
         <button onClick={onReset} style={{ alignSelf: "flex-start", border: "none", background: "transparent", padding: 0, cursor: "pointer", fontSize: 11, color: C.navy, fontFamily: "var(--sans)" }}>

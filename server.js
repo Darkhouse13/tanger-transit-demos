@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { EXTRACT_SYSTEM_PROMPT } from "./server/extractPrompt.js";
@@ -22,6 +23,17 @@ const PORT = Number.parseInt(process.env.PORT || "8080", 10);
 const OFFLINE = process.env.DEMO_OFFLINE === "1";
 const INVOICE_TEXT_LIMIT_BYTES = 24 * 1024;
 const QUERY_LIMIT_BYTES = 2 * 1024;
+
+/* Real ADII nomenclature (extracted from the 2022 tariff PDFs) — served for the
+   declarant's manual HS override (validate / autocomplete a typed code). Kept
+   server-side so the 1.5 MB dataset never lands in the browser bundle. Optional:
+   if the file is absent the override just falls back to the demo grid. */
+let ADII = [];
+let ADII_BY_CODE = new Map();
+try {
+  ADII = JSON.parse(readFileSync(path.join(__dirname, "data/adii/tariff.json"), "utf8"));
+  ADII_BY_CODE = new Map(ADII.map((e) => [e.code, e]));
+} catch { /* dataset not present — override falls back to the demo grid */ }
 
 const app = Fastify({
   logger: false,
@@ -152,6 +164,31 @@ app.get(
   async (_request, reply) => {
     const shipments = SHIPMENTS.map((s) => ({ ...s, surestarie: surestarieFor(s) }));
     reply.send({ ref_date: REF_DATE, kpis: computeBoardKpis(shipments), shipments });
+  }
+);
+
+/* ====== ADII HS lookup — validate / autocomplete a manual code (demo 1) ===== */
+app.get(
+  "/api/hs",
+  { config: { rateLimit: { max: 80, timeWindow: "1 minute" } } },
+  async (request, reply) => {
+    const q = request.query || {};
+    const code = String(q.code || "").replace(/\D/g, "").slice(0, 10);
+    if (code) {
+      const match = ADII_BY_CODE.get(code) || null;
+      reply.send({ code, found: !!match, match });
+      return;
+    }
+    const term = String(q.q || "").trim().slice(0, 60);
+    if (term.length >= 2) {
+      const digits = term.replace(/\D/g, "");
+      let results;
+      if (digits.length >= 2) results = ADII.filter((e) => e.code.startsWith(digits));
+      else { const t = term.toLowerCase(); results = ADII.filter((e) => (e.designation || "").toLowerCase().includes(t)); }
+      reply.send({ q: term, results: results.slice(0, 12) });
+      return;
+    }
+    reply.send({ results: [] });
   }
 );
 

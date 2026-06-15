@@ -12,7 +12,7 @@ export const HELP = {
     title: "AI Déclarant — de la facture à la DUM",
     items: [
       ["Extraction", "L'IA lit la facture — choisie, collée, ou déposée en PDF / photo (texte des PDF lu directement, images & scans par OCR côté navigateur) — et en extrait parties, lignes et montants. Aucune valeur monétaire n'est inventée : elle recopie ce qui est écrit."],
-      ["Code SH (10 chiffres)", "Proposé par un classeur déterministe (mots-clés FR/AR/EN) avec indice de confiance. Sous ~45 %, signalé « à vérifier ». Reclassement manuel possible ; un code validé passe à 100 %."],
+      ["Code SH (10 chiffres)", "Proposé par un classeur déterministe (mots-clés FR/AR/EN) avec indice de confiance. Sous ~45 %, signalé « à vérifier ». Vous pouvez reclasser : choisir un code suggéré, ou saisir le bon code — l'autocomplétion le valide sur la nomenclature ADII réelle (≈ 13 600 codes) et affiche sa désignation ; un code hors grille de chiffrage est marqué « taux à confirmer »."],
       ["Valeur en douane (CIF)", "Valeur facture convertie en MAD + quote-part de fret et d'assurance répartie entre les lignes (au prorata de la valeur, sinon du poids). Selon l'Incoterm, le fret/assurance déjà inclus ne sont pas recomptés (CIF, CFR, CIP, DDP…)."],
       ["Droits & taxes", "Droit = CIF × quotité du tarif. TPI = CIF × 0,25 %. TVA = (CIF + droit + TPI) × 20 %. Coût de revient = CIF + droit + TPI + TVA."],
       ["Documents requis", "Liste adaptée au flux : toujours facture + liste de colisage ; à l'import → bon à délivrer (BAD) ; à l'export → bon de livraison ; certificat d'origine si l'origine est préférentielle. Tout document obligatoire manquant est signalé."],
