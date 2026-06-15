@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { C } from "./tokens.js";
 import { useLocale, LangChip } from "./Locale.jsx";
 import { t } from "./i18n.js";
@@ -6,10 +6,29 @@ import { InfoHelp } from "./InfoHelp.jsx";
 import { DeclarantDemo } from "./DeclarantDemo.jsx";
 import { CalculatorDemo } from "./CalculatorDemo.jsx";
 import { DashboardDemo } from "./DashboardDemo.jsx";
+import { ImporterStatus } from "./ImporterStatus.jsx";
+
+/* Importer status-share route: #/suivi/<ref> renders the standalone, read-only
+   tracking page (no demo nav) — the link a transitaire sends the importer. */
+function parseHash() {
+  const m = (window.location.hash || "").match(/^#\/suivi\/(.+)$/);
+  return m ? { name: "suivi", ref: decodeURIComponent(m[1]) } : null;
+}
 
 export default function App() {
   const { locale } = useLocale();
   const [tab, setTab] = useState("declarant");
+  const [route, setRoute] = useState(() => parseHash());
+
+  useEffect(() => {
+    const onHash = () => setRoute(parseHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  if (route && route.name === "suivi") {
+    return <ImporterStatus refId={route.ref} onBack={() => { window.location.hash = ""; }} />;
+  }
 
   const tabs = [
     { key: "declarant", n: 1, label: t(locale, "nav_declarant"), sub: t(locale, "sub_declarant") },

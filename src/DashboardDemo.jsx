@@ -153,6 +153,15 @@ function SavingsBanner({ kpis }) {
           </div>
         </div>
       )}
+      {kpis.dataIssueCount > 0 && (
+        <div style={{ flex: "1 1 280px", display: "flex", alignItems: "center", gap: 13, background: "#F4E9D2", borderRadius: 8, padding: "14px 18px", border: "1px solid #E6D3A8" }}>
+          <Mono style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em", color: "#8A5A12" }}>{fmtInt(kpis.dataIssueTotal)}</Mono>
+          <div style={{ fontSize: 12.5, lineHeight: 1.4, color: C.ink2 }}>
+            <span style={{ fontWeight: 500 }}>anomalies de saisie</span> détectées avant dépôt<br />
+            {fmtInt(kpis.dataIssueCount)} dossier(s) — quantités, totaux, codes SH
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -241,6 +250,40 @@ function Timeline({ shipment, sur }) {
           ⚠ Sous-déclaration vs historique : écart ~{fmtInt(shipment.undervaluation.gap_mad)} MAD · droits & taxes éludés ~{fmtInt(shipment.undervaluation.eluded_mad)} MAD
         </div>
       )}
+      {shipment.anomalies && shipment.anomalies.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 10.5, fontFamily: "var(--mono)", letterSpacing: "0.05em", textTransform: "uppercase", color: "#8A5A12", marginBottom: 6 }}>Contrôles de saisie · à corriger avant dépôt</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {shipment.anomalies.map((a, i) => (
+              <span key={i} style={{ fontSize: 11.5, color: "#7A2E22", background: "#F2DAD5", borderRadius: 6, padding: "4px 10px" }} dir={dirOf(a.message || a.code)}>{a.message || a.code}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      <ShareImporter refId={shipment.ref} />
+    </div>
+  );
+}
+
+/* Read-only importer tracking link a transitaire copies/sends — the answer to
+   the "c'est dédouané ?" phone calls. Opens the #/suivi/<ref> status page. */
+function ShareImporter({ refId }) {
+  const [copied, setCopied] = useState(false);
+  const url = `${window.location.origin}${window.location.pathname}#/suivi/${encodeURIComponent(refId)}`;
+  const copy = (e) => {
+    e.stopPropagation();
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url); } catch { /* ignore */ }
+    setCopied(true); setTimeout(() => setCopied(false), 1400);
+  };
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: 10.5, fontFamily: "var(--mono)", letterSpacing: "0.05em", textTransform: "uppercase", color: C.faint, marginBottom: 7 }}>Suivi importateur · lien lecture seule</div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: 6, padding: "6px 10px", fontFamily: "var(--mono)", fontSize: 11.5, color: C.ink2, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{url}</span>
+        <button onClick={copy} style={{ border: `1px solid ${C.border2}`, background: C.paper, color: copied ? "#3F7A4E" : C.ink, borderRadius: 7, padding: "7px 12px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 12.5, fontWeight: 500 }}>{copied ? "✓ copié" : "⧉ Copier le lien"}</button>
+        <a href={`#/suivi/${encodeURIComponent(refId)}`} onClick={(e) => e.stopPropagation()} style={{ border: `1px solid ${C.navy}`, background: C.navy, color: "#FCFBF8", borderRadius: 7, padding: "7px 12px", textDecoration: "none", fontFamily: "var(--sans)", fontSize: 12.5, fontWeight: 500 }}>Ouvrir ↗</a>
+      </div>
+      <div style={{ fontSize: 11, color: C.faint, marginTop: 6 }}>À envoyer à l'importateur (WhatsApp / e-mail) — il suit son dossier sans appeler.</div>
     </div>
   );
 }

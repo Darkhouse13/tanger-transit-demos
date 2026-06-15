@@ -18,7 +18,8 @@ export const SHIPMENTS = [
   { id: "s2", ref: "DUM-2026-00151", importer: "Médina Textile", supplier: "Bursa Tekstil", origin: "TR",
     goods: "T-shirts coton & robes synthétiques", hsCode: "6109100012", mode: "mer", circuit: "orange", predictedCircuit: "orange", status: "sous_douane",
     eta: "2026-06-09", arrivedAt: "2026-06-09", freeTimeDays: 5, freeTimeEndsAt: "2026-06-14",
-    dailySurestarie: 700, declaredValueMad: 597000, riskFlags: ["Contrôle documentaire — certificat A.TR à valider"] },
+    dailySurestarie: 700, declaredValueMad: 597000, riskFlags: ["Contrôle documentaire — certificat A.TR à valider"],
+    anomalies: [{ code: "TOTAL_MISMATCH", message: "Somme des lignes ≠ total facture — écart à vérifier avant dépôt" }] },
 
   { id: "s3", ref: "DUM-2026-00153", importer: "Atlas Mobile Distribution", supplier: "Shenzhen Sourcing", origin: "CN",
     goods: "Téléphones mobiles (smartphones)", hsCode: "8517120000", mode: "air", circuit: "rouge", predictedCircuit: "rouge", status: "inspection",
@@ -49,7 +50,8 @@ export const SHIPMENTS = [
   { id: "s8", ref: "DUM-2026-00162", importer: "Atlantic Foods", supplier: "Santos Café", origin: "BR",
     goods: "Café torréfié en grains", hsCode: "0901210000", mode: "mer", circuit: "orange", predictedCircuit: "vert", status: "arrivé",
     eta: "2026-06-12", arrivedAt: "2026-06-12", freeTimeDays: 5, freeTimeEndsAt: "2026-06-17",
-    dailySurestarie: 800, declaredValueMad: 96000, riskFlags: ["Marchandise sensible — échantillon ONSSA"] },
+    dailySurestarie: 800, declaredValueMad: 96000, riskFlags: ["Marchandise sensible — échantillon ONSSA"],
+    anomalies: [{ code: "HS_CLIENT_MISMATCH", message: "Code SH client ≠ code proposé — ne pas s'y fier (amendes)" }] },
 
   { id: "s9", ref: "DUM-2026-00164", importer: "Atlas Mobile Distribution", supplier: "Shenzhen Powertech", origin: "CN",
     goods: "Chargeurs / alimentations", hsCode: "8504401000", mode: "air", circuit: "vert", predictedCircuit: "vert", status: "dédouané",
@@ -94,6 +96,8 @@ export function computeBoardKpis(shipments, refISO = REF_DATE) {
      assigned, over the dossiers where a real circuit is known. */
   const predicted = shipments.filter((s) => s.predictedCircuit);
   const predHits = predicted.filter((s) => s.predictedCircuit === s.circuit).length;
+  /* pre-flight story: dossiers carrying input anomalies caught before BADR. */
+  const withIssues = shipments.filter((s) => (s.anomalies || []).length > 0);
   return {
     total: shipments.length,
     vert: shipments.filter((s) => s.circuit === "vert").length,
@@ -115,6 +119,9 @@ export function computeBoardKpis(shipments, refISO = REF_DATE) {
     predictionHits: predHits,
     predictionMisses: predicted.length - predHits,
     predictionAccuracy: predicted.length ? Math.round((predHits / predicted.length) * 100) : null,
+    /* pre-flight catches: dossiers flagged + total anomalies, before deposit */
+    dataIssueCount: withIssues.length,
+    dataIssueTotal: shipments.reduce((a, s) => a + (s.anomalies || []).length, 0),
   };
 }
 
