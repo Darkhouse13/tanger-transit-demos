@@ -8,8 +8,32 @@ import { mad, fmt, fmtInt } from "../shared/format.js";
 import { INVOICES } from "../data/invoices.js";
 import { TARIFF_NOTE } from "../shared/tariff.js";
 import { enrichDeclaration } from "../shared/enrich.js";
+import { toBadrDeclaration } from "../shared/badrExport.js";
 import { historyFor } from "../data/history.js";
 import { addTracked, dossierFromDecl } from "./trackedStore.js";
+
+/* Copy a string to the clipboard (with a legacy fallback for older webviews). */
+function copyText(s) {
+  try { if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(s); } catch { /* fall through */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = s; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+  } catch { /* ignore */ }
+  return Promise.resolve();
+}
+
+/* Download a JS object as a pretty-printed .json file (the BADR hand-off). */
+function downloadJson(filename, obj) {
+  try {
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch { /* ignore */ }
+}
 
 /* Re-run the SAME deterministic engine in the browser with a manual HS override
    — instant, offline-proof. Raw line fields survive on the enriched decl, so we
@@ -347,8 +371,13 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
         <VerifyBadr predicted={predicted} actual={actual} onSet={setActual} locale={locale} />
       </Section>
 
-      {/* 05 DUM document */}
-      <div className="dum-reveal" style={{ opacity: shown(4) ? 1 : 0, transform: shown(4) ? "none" : "translateY(12px)", transition: "opacity .55s ease, transform .55s ease", marginTop: 20 }}>
+      {/* 05 Hand-off BADR — la déclaration prête à déposer */}
+      <Section index="05" title={t(locale, "d_sec_badr")} revealed={shown(4)}>
+        <BadrHandoff decl={decl} circuit={effective} numero={numero} locale={locale} />
+      </Section>
+
+      {/* 06 DUM document */}
+      <div className="dum-reveal" style={{ opacity: shown(5) ? 1 : 0, transform: shown(5) ? "none" : "translateY(12px)", transition: "opacity .55s ease, transform .55s ease", marginTop: 20 }}>
         <DumDocument decl={decl} numero={numero} />
       </div>
     </div>
@@ -502,6 +531,93 @@ function VerifyBadr({ predicted, actual, onSet, locale }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* ===================== BADR hand-off (no re-keying) ===================== */
+function BadrHandoff({ decl, circuit, numero, locale }) {
+  const data = useMemo(() => toBadrDeclaration(decl, { circuit }), [decl, circuit]);
+  const rtl = locale === "ar";
+  const grid2 = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 22px" };
+  const sub = (label) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 9, margin: "16px 0 6px" }}>
+      <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: C.ink2 }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: C.border }} />
+    </div>
+  );
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+        <p style={{ fontSize: 13, color: C.muted, margin: 0, maxWidth: 520, lineHeight: 1.5 }} dir={rtl ? "rtl" : "ltr"}>{t(locale, "d_badr_lede")}</p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <CircuitChip circuit={circuit} />
+          <CopyAction label={t(locale, "d_badr_copy_all")} copied={t(locale, "d_badr_copied")} getText={() => JSON.stringify(data.json, null, 2)} />
+          <Btn variant="ghost" onClick={() => downloadJson((numero || "DUM") + ".json", data.json)} style={{ padding: "8px 13px", fontSize: 12.5 }}>⤓ {t(locale, "d_badr_export")}</Btn>
+        </div>
+      </div>
+
+      {sub(t(locale, "d_badr_head"))}
+      <div style={grid2} className="tt-grid-2">
+        {data.head.map((f) => <BadrField key={f.key} f={f} locale={locale} />)}
+      </div>
+
+      {data.articles.map((a) => (
+        <div key={a.index} style={{ border: `1px solid ${C.border}`, borderRadius: 7, padding: "10px 14px", marginTop: 10, background: C.page }}>
+          <Mono style={{ fontSize: 11, color: C.navy }}>{t(locale, "d_badr_article")} {a.index}</Mono>
+          <div style={{ ...grid2, marginTop: 2 }} className="tt-grid-2">
+            {a.fields.map((f) => <BadrField key={f.key} f={f} locale={locale} />)}
+          </div>
+        </div>
+      ))}
+
+      {sub(t(locale, "d_badr_totals"))}
+      <div style={grid2} className="tt-grid-2">
+        {data.totals.map((f) => <BadrField key={f.key} f={f} locale={locale} />)}
+      </div>
+
+      <DemoNote style={{ marginTop: 14 }}>{t(locale, "d_badr_legend")}</DemoNote>
+    </div>
+  );
+}
+
+/* One BADR field: label + value, with copy, "à renseigner" and "hypothèse" tags. */
+function BadrField({ f, locale }) {
+  const label = locale === "ar" ? f.label.ar : f.label.fr;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderTop: `1px solid ${C.border}` }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontFamily: "var(--mono)", fontSize: 9.5, letterSpacing: "0.04em", textTransform: "uppercase", color: C.faint }}>{label}</div>
+        {f.missing ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 3, fontSize: 11, fontWeight: 500, color: "#9A6B1F", background: "#F4E9D2", borderRadius: 5, padding: "2px 8px" }}>
+            <span style={{ width: 5, height: 5, borderRadius: 5, background: "#9A6B1F" }} />{t(locale, "d_badr_todo")}
+          </span>
+        ) : (
+          <div dir={dirOf(String(f.value))} style={{ fontSize: 13, color: C.ink, fontWeight: 500, marginTop: 1, lineHeight: 1.4, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+            <span>{f.value}</span>
+            {f.assumed && <span style={{ fontSize: 9, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 6px", letterSpacing: "0.02em" }}>{t(locale, "d_badr_assumed")}</span>}
+          </div>
+        )}
+      </div>
+      {!f.missing && <CopyAction icon getText={() => String(f.value)} title={t(locale, "d_badr_copyfield")} copied={t(locale, "d_badr_copied")} />}
+    </div>
+  );
+}
+
+/* Copy-to-clipboard control — small ⧉ icon (fields) or labelled button (JSON). */
+function CopyAction({ getText, label, icon, title, copied }) {
+  const [done, setDone] = useState(false);
+  const onClick = () => { copyText(getText()); setDone(true); setTimeout(() => setDone(false), 1200); };
+  if (icon) {
+    return (
+      <button onClick={onClick} title={title} style={{ flexShrink: 0, alignSelf: "center", border: "none", background: "transparent", cursor: "pointer", color: done ? "#3F7A4E" : C.faint, fontSize: 13, padding: "2px 4px", fontFamily: "var(--sans)" }}>
+        {done ? "✓" : "⧉"}
+      </button>
+    );
+  }
+  return (
+    <button onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${C.border2}`, background: C.paper, color: done ? "#3F7A4E" : C.ink, borderRadius: 8, padding: "8px 13px", cursor: "pointer", fontFamily: "var(--sans)", fontSize: 12.5, fontWeight: 500 }}>
+      {done ? "✓ " + copied : "⧉ " + label}
+    </button>
   );
 }
 
