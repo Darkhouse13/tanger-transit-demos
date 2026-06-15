@@ -34,7 +34,8 @@ npm start                     # http://localhost:8080
   DEMO_OFFLINE=1 npm start
   ```
 - **Itération en dev** : `npm run dev` (port 5173, proxy `/api` → 8080) avec `npm start` dans un second terminal.
-- **Clé API** : `DEEPSEEK_API_KEY` sert UNIQUEMENT à extraire une facture **collée** (texte libre). Les exemples et les démos 2 & 3 marchent sans clé. La clé reste **côté serveur** (jamais exposée au navigateur).
+- **Import de document (PDF / photo)** — le Déclarant accepte une facture **déposée** (glisser-déposer) : le texte est extrait **côté navigateur** (couche texte des PDF via pdfjs ; OCR FR/EN des images & scans via Tesseract — chargés à la demande). Le texte obtenu suit le même pipeline que le collage. Un PDF contenant un n° de facture d'exemple est reconnu **hors-ligne** ; un document réel nécessite la clé pour la structuration.
+- **Clé API** : `DEEPSEEK_API_KEY` sert UNIQUEMENT à structurer une facture **collée ou importée** (texte libre) en déclaration. Les exemples et les démos 2 & 3 marchent sans clé. La clé reste **côté serveur** (jamais exposée au navigateur).
 - **Test du moteur** (déterminisme) : `node _validate.mjs` — vérifie l'exemple chiffré au dirham près et les 5 circuits attendus.
 - **Docker** : `docker build -t tt . && docker run -p 8080:8080 -e DEMO_OFFLINE=1 tt`.
 

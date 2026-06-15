@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { C, CIRCUIT } from "./tokens.js";
 import { Eyebrow, Btn, Mono, Section, Field, CircuitChip, Analyzing, DemoNote, useCountUp, grid, InfoDot } from "./ui.jsx";
 import { dirOf } from "./lang.js";
@@ -11,6 +11,7 @@ import { enrichDeclaration } from "../shared/enrich.js";
 import { toBadrDeclaration } from "../shared/badrExport.js";
 import { historyFor } from "../data/history.js";
 import { addTracked, dossierFromDecl } from "./trackedStore.js";
+import { extractTextFromFile, fileKind } from "./extractText.js";
 
 /* Copy a string to the clipboard (with a legacy fallback for older webviews). */
 function copyText(s) {
@@ -122,13 +123,67 @@ export function DeclarantDemo({ onNavigate }) {
 
   if (view === "analyzing") return <Analyzing steps={[1, 2, 3, 4, 5, 6].map((n) => t(locale, "d_step" + n))} source={source} text={rawText} title={t(locale, "d_an_title")} note={t(locale, "d_an_note")} />;
   if (view === "result" && decl) return <Result decl={decl} onBack={() => setView("reception")} onNavigate={onNavigate} />;
-  return <Reception onPick={run} error={error} />;
+  return <Reception onPick={run} error={error} defaultText={rawText} />;
+}
+
+/* ----------------------- drop a real document (OCR) --------------------- */
+function DropZone({ onText, onError, locale }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(null); // { label, pct } while reading
+  const [over, setOver] = useState(false);
+
+  async function handle(file) {
+    if (!file) return;
+    onError(null);
+    if (fileKind(file) === "other") { onError(t(locale, "d_drop_unsupported")); return; }
+    setBusy({ label: t(locale, "d_drop_reading"), pct: 0 });
+    try {
+      const text = await extractTextFromFile(file, (p) => setBusy({ label: t(locale, p.label), pct: p.pct || 0 }));
+      setBusy(null);
+      if (text && text.trim()) onText(text.trim());
+      else onError(t(locale, "d_drop_failed"));
+    } catch (e) {
+      setBusy(null);
+      onError(t(locale, e && e.message === "unsupported" ? "d_drop_unsupported" : "d_drop_failed"));
+    }
+  }
+
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); setOver(false); handle(e.dataTransfer.files && e.dataTransfer.files[0]); }}
+      onClick={() => { if (!busy && inputRef.current) inputRef.current.click(); }}
+      style={{
+        border: `1.5px dashed ${over ? C.navy : C.border2}`, background: over ? C.tint1 : C.page,
+        borderRadius: 9, padding: "22px 16px", textAlign: "center", cursor: busy ? "default" : "pointer", transition: "all .15s ease",
+      }}
+    >
+      <input ref={inputRef} type="file" accept=".pdf,image/*" style={{ display: "none" }}
+        onChange={(e) => handle(e.target.files && e.target.files[0])} />
+      {busy ? (
+        <div>
+          <div style={{ fontSize: 13, color: C.ink2, marginBottom: 9 }}>{busy.label}</div>
+          <div style={{ height: 5, borderRadius: 4, background: C.tint2, overflow: "hidden", maxWidth: 260, margin: "0 auto" }}>
+            <div style={{ height: "100%", width: `${Math.round((busy.pct || 0) * 100)}%`, background: C.navy, transition: "width .25s ease" }} />
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 22, color: C.navy, marginBottom: 5 }}>⤓</div>
+          <div style={{ fontSize: 13.5, fontWeight: 500, color: C.ink2 }}>{t(locale, "d_drop_cta")}</div>
+          <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>{t(locale, "d_drop_sub")}</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ------------------------------ réception ------------------------------- */
-function Reception({ onPick, error }) {
+function Reception({ onPick, error, defaultText }) {
   const { locale } = useLocale();
-  const [paste, setPaste] = useState("");
+  const [paste, setPaste] = useState(defaultText || "");
+  const [dropError, setDropError] = useState(null);
   return (
     <div style={{ animation: "coursFade .4s ease" }}>
       <Eyebrow>{t(locale, "d_recept_eyebrow")}</Eyebrow>
@@ -173,10 +228,21 @@ function Reception({ onPick, error }) {
       </div>
 
       <div style={{ marginTop: 18, border: `1px solid ${C.border}`, borderRadius: 8, background: C.paper, padding: 18 }}>
-        <Eyebrow color={C.muted}>{t(locale, "d_paste_eyebrow")}</Eyebrow>
+        <Eyebrow color={C.muted}>{t(locale, "d_drop_eyebrow")}</Eyebrow>
+        <div style={{ marginTop: 10 }}>
+          <DropZone onText={(text) => { setPaste(text); onPick(text, null); }} onError={setDropError} locale={locale} />
+        </div>
+        {dropError && (
+          <div style={{ background: "#F2DAD5", border: `1px solid ${C.border2}`, borderRadius: 8, padding: "9px 12px", marginTop: 10, fontSize: 12.5, color: "#7A2E22" }} dir={dirOf(dropError)}>{dropError}</div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "15px 0 4px" }}>
+          <div style={{ flex: 1, height: 1, background: C.border }} />
+          <span style={{ fontSize: 11, color: C.faint }}>{t(locale, "d_drop_or")}</span>
+          <div style={{ flex: 1, height: 1, background: C.border }} />
+        </div>
         <textarea value={paste} onChange={(e) => setPaste(e.target.value)}
           placeholder={t(locale, "d_paste_ph")} className="cours-scroll" dir={dirOf(paste)}
-          style={{ width: "100%", minHeight: 92, marginTop: 10, resize: "vertical", border: `1px solid ${C.border}`, borderRadius: 7, padding: "11px 13px", fontFamily: "var(--sans)", fontSize: 13, color: C.ink, background: C.page, outline: "none", lineHeight: 1.55, boxSizing: "border-box" }} />
+          style={{ width: "100%", minHeight: 92, marginTop: 6, resize: "vertical", border: `1px solid ${C.border}`, borderRadius: 7, padding: "11px 13px", fontFamily: "var(--sans)", fontSize: 13, color: C.ink, background: C.page, outline: "none", lineHeight: 1.55, boxSizing: "border-box" }} />
         <div style={{ marginTop: 11, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <DemoNote>{TARIFF_NOTE}</DemoNote>
           <Btn disabled={!paste.trim()} onClick={() => onPick(paste.trim(), null)}>{t(locale, "d_paste_btn")}</Btn>
