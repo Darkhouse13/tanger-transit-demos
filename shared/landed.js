@@ -18,8 +18,11 @@
 
 import { r2, toMAD } from "./format.js";
 
-/* Incoterm → which costs are already inside the invoice line value. */
-const INCLUDES_FREIGHT = new Set(["CIF", "CIP", "DDP", "CFR", "CPT"]);
+/* Incoterm → which costs are already inside the invoice line value.
+   DAP/DPU: the seller carries the goods to the named destination, so main
+   carriage (freight) is already in the price — do NOT re-add it. Insurance is
+   not obligatory under DAP/DPU, so it stays addable if separately invoiced. */
+const INCLUDES_FREIGHT = new Set(["CIF", "CIP", "CFR", "CPT", "DAP", "DPU", "DDP"]);
 const INCLUDES_INSURANCE = new Set(["CIF", "CIP", "DDP"]);
 
 export function computeLanded(lines, opts = {}) {

@@ -40,21 +40,25 @@ export function toBadrDeclaration(decl = {}, opts = {}) {
   const totals = decl.totals || {};
   const currency = decl.currency || header.currency || "MAD";
   const circuit = opts.circuit || (decl.prediction && decl.prediction.predicted) || (decl.risk && decl.risk.circuit) || "vert";
+  const flow = opts.flow || decl.flow || "import";
 
   const fxRate = FX_TO_MAD[currency] != null ? FX_TO_MAD[currency] : 1;
-  const provenance = seller.country || decl.origin_country || null;
+  /* On export the origin is Morocco; on import it's the product's real origin. */
+  const originCountry = flow === "export" ? (decl.origin_country || "MA") : decl.origin_country;
+  const provenance = seller.country || originCountry || null;
 
   /* ---- en-tête ---- */
   const head = [
     field("bureau", "Bureau de douane", "مكتب الجمارك", null, { missing: true }),
     field("regime", "Régime douanier", "النظام الجمركي", `${REGIME.code} — ${REGIME.fr}`,
       { raw: REGIME.code, assumed: true }),
+    field("flux", "Flux", "النوع", flow === "export" ? "Export" : "Import", { raw: flow, assumed: true }),
     field("importateur", "Importateur", "المستورد", buyer.name || null, { missing: !buyer.name }),
     field("ice", "ICE importateur", "المعرّف الموحّد للمقاولة", null, { missing: true }),
     field("exportateur", "Exportateur / Fournisseur", "المصدّر / المورّد",
       seller.name ? `${seller.name}${seller.country ? " (" + seller.country + ")" : ""}` : null,
       { raw: seller.name || null, missing: !seller.name }),
-    field("origine", "Pays d'origine", "بلد المنشأ", decl.origin_country || null, { missing: !decl.origin_country }),
+    field("origine", "Pays d'origine", "بلد المنشأ", originCountry || null, { missing: !originCountry, assumed: flow === "export" && !decl.origin_country }),
     field("provenance", "Pays de provenance", "بلد الإرسال", provenance, { assumed: !seller.country && !!provenance }),
     field("incoterm", "Incoterm", "إنكوترم",
       header.incoterm ? `${header.incoterm}${header.incoterm_place ? " " + header.incoterm_place : ""}` : null,

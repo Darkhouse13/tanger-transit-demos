@@ -10,6 +10,7 @@ import { resolveHs } from "./classify.js";
 import { computeLanded } from "./landed.js";
 import { assessRisk } from "./risk.js";
 import { predictBadr, remediationFor } from "./badr.js";
+import { runPreflight } from "./checks.js";
 import { TARIFF_BY_CODE } from "./tariff.js";
 
 export function enrichDeclaration(extracted, meta = {}) {
@@ -129,15 +130,28 @@ export function enrichDeclaration(extracted, meta = {}) {
     };
   }
 
+  /* 5 — pre-flight input checks (arithmetic, duplicates, weight/amount swap,
+     client HS mismatch, mandatory documents). Deterministic, separate from the
+     risk circuit: "is the declaration correct & complete?" vs "how hard will
+     customs look?". Runs on the enriched lines so it sees our HS code + totals. */
+  const checks = runPreflight({
+    header,
+    lines: withHistory,
+    documents_present: header.documents_present || [],
+    coo_present,
+  });
+
   return {
     header,
     currency,
     incoterm,
+    flow: checks.flow,
     lines: withHistory,
     totals,
     risk,
     prediction,
     remediation,
+    checks,
     undervaluation,
     coo_present,
     origin_country,

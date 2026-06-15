@@ -138,6 +138,18 @@ const STRINGS = {
     d_badr_assumed: "hypothèse",
     d_badr_copyfield: "copier",
     d_badr_legend: "« à renseigner » : champ à compléter dans BADR · « hypothèse » : valeur déduite par défaut, à confirmer avant dépôt.",
+    // contrôles de saisie + documents (demo 1)
+    d_sec_controls: "Contrôles de saisie",
+    d_controls_sub: "À corriger avant dépôt — évite rejets et amendes",
+    d_controls_ok: "Contrôles conformes — quantités, totaux et codes cohérents.",
+    d_docs_required: "Documents requis",
+    d_flux_label: "Flux",
+    d_flux_import: "Import",
+    d_flux_export: "Export",
+    d_doc_bad: "Bon à délivrer (BAD)",
+    d_doc_bon_livraison: "Bon de livraison",
+    d_doc_optional: "recommandé",
+    d_hs_client_warn: "code client — ne pas s'y fier",
   },
   ar: {
     brand_tagline: "الذكاء الاصطناعي ينظّم، والشيفرة تحسب",
@@ -274,6 +286,18 @@ const STRINGS = {
     d_badr_assumed: "افتراض",
     d_badr_copyfield: "نسخ",
     d_badr_legend: "«للإدخال»: حقل يُستكمل في BADR · «افتراض»: قيمة مُستنتَجة افتراضيًا، للتأكيد قبل الإيداع.",
+    // ضوابط الإدخال + الوثائق (demo 1)
+    d_sec_controls: "ضوابط الإدخال",
+    d_controls_sub: "للتصحيح قبل الإيداع — يتفادى الرفض والغرامات",
+    d_controls_ok: "ضوابط مطابقة — الكميات والمجاميع والرموز متناسقة.",
+    d_docs_required: "الوثائق المطلوبة",
+    d_flux_label: "النوع",
+    d_flux_import: "استيراد",
+    d_flux_export: "تصدير",
+    d_doc_bad: "إذن التسليم (BAD)",
+    d_doc_bon_livraison: "وصل التسليم",
+    d_doc_optional: "موصى به",
+    d_hs_client_warn: "رمز العميل — لا تثق به",
   },
 };
 

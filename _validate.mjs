@@ -2,6 +2,7 @@ import { INVOICES } from "./data/invoices.js";
 import { enrichDeclaration } from "./shared/enrich.js";
 import { computeLanded } from "./shared/landed.js";
 import { rankHs } from "./shared/classify.js";
+import { runPreflight } from "./shared/checks.js";
 
 let pass = true;
 
@@ -40,7 +41,49 @@ for (const inv of INVOICES) {
     && (d.remediation || []).length <= d.risk.flags.length;
   if (!predOk) pass = false;
   console.log(`      BADR: predicted=${p.predicted} conf=${Math.round((p.confidence || 0) * 100)}% Σ=${distSum.toFixed(2)} todo=${(d.remediation || []).length} ${predOk ? "OK" : "*** PREDICTION MISMATCH ***"}`);
+  const ck = d.checks || { flow: "?", anomalies: [] };
+  console.log(`      CHECKS: flow=${ck.flow} anomalies=[${ck.anomalies.map((a) => a.code).join(", ") || "—"}]`);
+  /* The clean samples must NOT raise a weight/amount false positive even when a
+     legitimate value happens to equal the weight (inv4: 18000 € = 18000 kg). */
+  if (inv.id === "inv4" && ck.anomalies.some((a) => a.code === "WEIGHT_VALUE")) {
+    pass = false; console.log("      *** inv4 WEIGHT_VALUE false positive ***");
+  }
+  /* inv7 is engineered to trip the pre-flight (qty, dup, total, client HS). */
+  if (inv.id === "inv7") {
+    const need = ["QTY_MISMATCH", "DUP_LINE", "TOTAL_MISMATCH", "HS_CLIENT_MISMATCH"];
+    const got = new Set(ck.anomalies.map((a) => a.code));
+    const ok = need.every((c) => got.has(c));
+    if (!ok) pass = false;
+    console.log(`      inv7 pre-flight: ${need.filter((c) => got.has(c)).join(", ")} ${ok ? "OK" : "*** MISSING " + need.filter((c) => !got.has(c)).join(", ") + " ***"}`);
+  }
 }
+
+/* 2b — incoterm cost inclusion (DAP/DPU must NOT re-add freight; EXW must) */
+console.log("\nINCOTERMS:");
+for (const [inco, expCif] of [["DAP", 1000], ["DPU", 1000], ["DDP", 1000], ["EXW", 1500], ["FOB", 1500], ["CFR", 1000]]) {
+  const r = computeLanded([{ line_total: 1000, duty: 0, vat: 20, tpi: 0.25 }], { currency: "MAD", incoterm: inco, freight: 500, insurance: 0 });
+  const ok = Math.abs(r.totals.cif_mad - expCif) < 0.01;
+  if (!ok) pass = false;
+  console.log(`  ${inco}: CIF=${r.totals.cif_mad} expected=${expCif} ${ok ? "OK" : "*** MISMATCH ***"}`);
+}
+
+/* 2c — pre-flight checks fire on crafted bad input */
+console.log("\nPRE-FLIGHT:");
+const pf = runPreflight({
+  header: { buyer: { country: "MA" }, seller: { country: "FR" }, total_amount: 16800 },
+  documents_present: ["facture"], // colisage + bad missing
+  lines: [
+    { description: "Faisceaux", quantity: 300, unit_price: 25, line_total_src: 7500, gross_weight_kg: 900, hs_code: "8544300000", declared_hs: "8473309000" },
+    { description: "Roulements", quantity: 200, unit_price: 9, line_total_src: 2700, gross_weight_kg: 500, hs_code: "8482100000" },
+    { description: "Faisceaux", quantity: 300, unit_price: 25, line_total_src: 7500, gross_weight_kg: 900, hs_code: "8544300000" },
+    { description: "Sacs PE", quantity: 100, unit_price: 50, line_total_src: 2000, gross_weight_kg: 2000, hs_code: "3923210000" }, // weight swapped into amount
+  ],
+});
+const codes = new Set(pf.anomalies.map((a) => a.code));
+const wantPf = ["QTY_MISMATCH", "DUP_LINE", "TOTAL_MISMATCH", "HS_CLIENT_MISMATCH", "WEIGHT_VALUE", "DOC_MISSING"];
+const pfOk = pf.flow === "import" && wantPf.every((c) => codes.has(c));
+if (!pfOk) pass = false;
+console.log(`  flow=${pf.flow} fired=[${[...codes].join(", ")}] ${pfOk ? "OK" : "*** MISSING " + wantPf.filter((c) => !codes.has(c)).join(", ") + " ***"}`);
 
 /* 3 — classifier sanity on a few free-text queries (demo 2) */
 console.log("\nCLASSIFY:");

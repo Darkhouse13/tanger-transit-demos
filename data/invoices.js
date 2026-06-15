@@ -41,8 +41,8 @@ Origine: France. Documents: facture, liste de colisage, BL, certificat d'origine
         buyer: { name: "Détroit Auto Maroc SARL", city: "Tanger", country: "MA" },
         invoice_no: "FR-2026-0412", invoice_date: "2026-06-03",
         incoterm: "FOB", incoterm_place: "Le Havre", currency: "EUR",
-        freight_amount: 1200, insurance_amount: 150,
-        documents_present: ["facture", "colisage", "bl", "certificat_origine"],
+        freight_amount: 1200, insurance_amount: 150, total_amount: 16400,
+        documents_present: ["facture", "colisage", "bl", "bad", "certificat_origine"],
       },
       lines: [
         { raw_description: "Faisceaux de câblage automobile", quantity: 400, unit: "piece", unit_price: 25, line_total: 10000, declared_origin: "FR", gross_weight_kg: 1200 },
@@ -81,8 +81,8 @@ Origin: Türkiye. Movement certificate A.TR + certificate of origin enclosed.`,
         buyer: { name: "Médina Textile", city: "Casablanca", country: "MA" },
         invoice_no: "BRS-7781", invoice_date: "2026-06-05",
         incoterm: "CFR", incoterm_place: "Tanger Med", currency: "EUR",
-        freight_amount: 0, insurance_amount: 0,
-        documents_present: ["facture", "colisage", "bl", "certificat_origine"],
+        freight_amount: 0, insurance_amount: 0, total_amount: 55100,
+        documents_present: ["facture", "colisage", "bl", "bad", "certificat_origine"],
       },
       lines: [
         { raw_description: "T-shirts en coton, col rond", quantity: 5000, unit: "piece", unit_price: 3.5, line_total: 17500, declared_origin: "TR", gross_weight_kg: 900 },
@@ -120,8 +120,8 @@ Origin: China. Docs: invoice, packing list, B/L.`,
         buyer: { name: "Atlas Mobile Distribution", city: "Tanger", country: "MA" },
         invoice_no: "SZ-90233", invoice_date: "2026-06-09",
         incoterm: "FOB", incoterm_place: "Shenzhen", currency: "USD",
-        freight_amount: 800, insurance_amount: 100,
-        documents_present: ["facture", "colisage", "bl"],
+        freight_amount: 800, insurance_amount: 100, total_amount: 22000,
+        documents_present: ["facture", "colisage", "bl", "bad"],
       },
       lines: [
         { raw_description: "Téléphones mobiles (smartphones) 6.5\"", quantity: 2000, unit: "piece", unit_price: 11, line_total: 22000, declared_origin: "CN", gross_weight_kg: 400 },
@@ -157,8 +157,8 @@ Origen: España. Documentos: factura, packing list, B/L.
         buyer: { name: "Rif Bâti Distribution", city: "Tétouan", country: "MA" },
         invoice_no: "VC-1182", invoice_date: "2026-06-08",
         incoterm: "CIF", incoterm_place: "Tanger Med", currency: "EUR",
-        freight_amount: 0, insurance_amount: 0,
-        documents_present: ["facture", "colisage", "bl"],
+        freight_amount: 0, insurance_amount: 0, total_amount: 18000,
+        documents_present: ["facture", "colisage", "bl", "bad"],
       },
       lines: [
         { raw_description: "Carreaux en céramique émaillée 60x60", quantity: 3000, unit: "m2", unit_price: 6, line_total: 18000, declared_origin: "ES", gross_weight_kg: 18000 },
@@ -197,8 +197,8 @@ Origine: UE. Documents: facture, colisage, BL, certificat d'origine.`,
         buyer: { name: "Société Tanger Négoce", city: "Tanger", country: "MA" },
         invoice_no: "IB-3340", invoice_date: "2026-06-07",
         incoterm: "FOB", incoterm_place: "Algeciras", currency: "EUR",
-        freight_amount: 600, insurance_amount: 80,
-        documents_present: ["facture", "colisage", "bl", "certificat_origine"],
+        freight_amount: 600, insurance_amount: 80, total_amount: 32800,
+        documents_present: ["facture", "colisage", "bl", "bad", "certificat_origine"],
       },
       lines: [
         { raw_description: "حذاء جلدي رجالي / Chaussures cuir homme", quantity: 600, unit: "pair", unit_price: 35, line_total: 21000, declared_origin: "ES", gross_weight_kg: 1200 },
@@ -248,12 +248,63 @@ origine : France .  docs joints : facture , colisage , BL , certif . origine EUR
         buyer: { name: "Détroit Auto Maroc SARL", city: "Tanger", country: "MA" },
         invoice_no: "FR-2026-0510", invoice_date: "2026-06-10",
         incoterm: "FOB", incoterm_place: "Le Havre", currency: "EUR",
-        freight_amount: 980, insurance_amount: 120,
-        documents_present: ["facture", "colisage", "bl", "certificat_origine"],
+        freight_amount: 980, insurance_amount: 120, total_amount: 24700,
+        documents_present: ["facture", "colisage", "bl", "bad", "certificat_origine"],
       },
       lines: [
         { raw_description: "Roulements à billes (réf. 6204)", quantity: 1500, unit: "piece", unit_price: 9, line_total: 13500, declared_origin: "FR", gross_weight_kg: 750 },
         { raw_description: "Pneumatiques neufs pour voiture", quantity: 400, unit: "piece", unit_price: 28, line_total: 11200, declared_origin: "FR", gross_weight_kg: 3200 },
+      ],
+    },
+    meta: { origin_country: "FR", coo_present: true, importer_known: true, expected_circuit: "vert" },
+  },
+
+  /* ---------- 7. Clean circuit, but messy DATA -> VERT + pre-flight catches ---------- */
+  {
+    id: "inv7",
+    sender: "Détroit Auto Maroc",
+    email: "logistique@detroit-auto.ma",
+    date: "Aujourd'hui · 11:30",
+    subject: "Fwd: facture Garonne (2 pages) — faisceaux + roulements, à vérifier",
+    snippet: "Scan 2 pages : l'article se poursuit p.2, le client a mis ses propres codes SH, total qui ne tombe pas juste…",
+    body:
+`---------- Message transféré ----------
+De: logistique@detroit-auto.ma
+Objet: Fwd: facture fournisseur (2 pages) à dédouaner
+
+bonjour, facture sur 2 pages (scan). le fournisseur a mis ses propres codes douaniers.
+merci de vérifier, le total ne tombe pas juste de mon côté. cdlt.
+
+FACTURE COMMERCIALE / COMMERCIAL INVOICE — page 1/2
+Garonne Components SAS — Mérignac (33), France
+Facture n° FR-2026-0590   Date: 12/06/2026
+Vendu à: Détroit Auto Maroc SARL, Z.I. Gzenaya, Tanger (MA)
+
+Incoterm: FOB Le Havre     Devise: EUR
+Fret: 700,00     Assurance: 90,00
+
+Réf      Désignation                          HS (client)   Qté    P.U.(EUR)   Total
+HV-441   Faisceaux de câblage automobile      8473.30.90    300    25,00       7 500,00
+RL-882   Roulements à billes (réf. 6204)      8482.10.00    200     9,00       2 700,00
+
+--- page 2/2 (suite) ---
+HV-441   Faisceaux de câblage automobile      8473.30.90    300    25,00       7 500,00
+                                                            TOTAL HT          16 800,00
+
+Origine: France. Docs joints: facture, colisage, BL, BAD, certificat d'origine EUR.1.`,
+    extracted: {
+      header: {
+        seller: { name: "Garonne Components SAS", country: "FR" },
+        buyer: { name: "Détroit Auto Maroc SARL", city: "Tanger", country: "MA" },
+        invoice_no: "FR-2026-0590", invoice_date: "2026-06-12",
+        incoterm: "FOB", incoterm_place: "Le Havre", currency: "EUR",
+        freight_amount: 700, insurance_amount: 90, total_amount: 16800,
+        documents_present: ["facture", "colisage", "bl", "bad", "certificat_origine"],
+      },
+      lines: [
+        { raw_description: "Faisceaux de câblage automobile", quantity: 300, unit: "piece", unit_price: 25, line_total: 7500, declared_origin: "FR", gross_weight_kg: 900, declared_hs: "8473309000" },
+        { raw_description: "Roulements à billes (réf. 6204)", quantity: 200, unit: "piece", unit_price: 9, line_total: 2700, declared_origin: "FR", gross_weight_kg: 500 },
+        { raw_description: "Faisceaux de câblage automobile", quantity: 300, unit: "piece", unit_price: 25, line_total: 7500, declared_origin: "FR", gross_weight_kg: 900 },
       ],
     },
     meta: { origin_country: "FR", coo_present: true, importer_known: true, expected_circuit: "vert" },

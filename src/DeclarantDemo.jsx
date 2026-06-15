@@ -44,8 +44,9 @@ function recompute(decl, hsOverrides) {
     lines: (decl.lines || []).map((l) => ({
       raw_description: l.raw_description || l.description,
       quantity: l.quantity, unit: l.unit, unit_price: l.unit_price,
-      line_total: l.line_total, declared_origin: l.declared_origin,
-      gross_weight_kg: l.gross_weight_kg,
+      line_total: l.line_total_src != null ? l.line_total_src : l.line_total,
+      declared_origin: l.declared_origin,
+      gross_weight_kg: l.gross_weight_kg, declared_hs: l.declared_hs,
     })),
   };
   return enrichDeclaration(extracted, {
@@ -80,6 +81,12 @@ const FIELD_INFO = {
   tpi: "TPI (taxe parafiscale à l'importation) = CIF × 0,25 %.",
   landed: "Coût de revient dédouané = CIF + droits + TVA + TPI. Ce que la marchandise coûte une fois dédouanée (hors logistique aval).",
   confidence: "Confiance = écart du score de risque aux seuils de circuit (orange ≥ 12, rouge ≥ 30). Un signal bloquant (sous-évaluation, certificat manquant…) fixe d'office le circuit rouge. C'est une prédiction — pas la réponse réelle de BADR.",
+};
+
+/* Document code → i18n label key for the flow-aware required-docs checklist. */
+const DOC_KEY = {
+  facture: "d_doc_facture", colisage: "d_doc_colisage", certificat_origine: "d_doc_coo",
+  bl: "d_doc_bl", bad: "d_doc_bad", bon_livraison: "d_doc_bon_livraison",
 };
 
 export function DeclarantDemo({ onNavigate }) {
@@ -248,19 +255,25 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
           <Field label={t(locale, "d_f_incoterm")} value={header.incoterm} mono missing={!header.incoterm} hint={header.incoterm_place} />
           <Field label={t(locale, "d_f_origin")} value={decl.origin_country} mono missing={!decl.origin_country} info={FIELD_INFO.origin} />
         </div>
-        <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {[["facture", "d_doc_facture"], ["colisage", "d_doc_colisage"], ["certificat_origine", "d_doc_coo"], ["bl", "d_doc_bl"]].map(([d, key]) => {
-            const present = (decl.documents_present || []).includes(d);
-            return (
-              <span key={d} style={{
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.05em", textTransform: "uppercase", color: C.faint }}>{t(locale, "d_docs_required")}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 5, padding: "2px 8px" }}>
+              {t(locale, "d_flux_label")} : {t(locale, decl.flow === "export" ? "d_flux_export" : "d_flux_import")}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {((decl.checks && decl.checks.documents) || []).map((d) => (
+              <span key={d.code} style={{
                 fontSize: 11.5, fontWeight: 500, borderRadius: 6, padding: "4px 10px",
                 display: "inline-flex", alignItems: "center", gap: 6,
-                color: present ? "#2F5A43" : "#7A2E22", background: present ? "#DCE5DD" : "#F2DAD5",
+                color: d.present ? "#2F5A43" : "#7A2E22", background: d.present ? "#DCE5DD" : "#F2DAD5",
               }}>
-                <span>{present ? "✓" : "✕"}</span> {t(locale, key)}
+                <span>{d.present ? "✓" : "✕"}</span> {t(locale, DOC_KEY[d.code] || d.code)}
+                {!d.mandatory && <span style={{ fontSize: 9.5, color: C.muted }}>· {t(locale, "d_doc_optional")}</span>}
               </span>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </Section>
 
@@ -289,9 +302,12 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
                       <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{fmtInt(l.quantity)} {l.unit} · {l.hs_label_fr}</div>
                     </td>
                     <td style={{ padding: "11px 12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <Mono style={{ fontSize: 12.5, color: C.navy }}>{l.hs_code}</Mono>
                         {l.manual_hs && <span style={{ fontSize: 9.5, fontWeight: 600, color: C.navy, background: C.tint2, borderRadius: 4, padding: "1px 5px" }}>{t(locale, "d_manual")}</span>}
+                        {l.declared_hs && String(l.declared_hs).replace(/\D/g, "") !== String(l.hs_code || "").replace(/\D/g, "") && (
+                          <span title={`${t(locale, "d_hs_client_warn")} : ${l.declared_hs}`} style={{ fontSize: 9.5, fontWeight: 600, color: "#7A2E22", background: "#F2DAD5", borderRadius: 4, padding: "1px 5px", whiteSpace: "nowrap" }}>⚠ {l.declared_hs}</span>
+                        )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3 }}>
                         <span style={{ width: 30, height: 4, borderRadius: 3, background: C.tint2, overflow: "hidden", display: "inline-block" }}>
@@ -352,6 +368,7 @@ function Result({ decl: initialDecl, onBack, onNavigate }) {
       <Section index="04" title={t(locale, "d_sec_risk_pred")} revealed={shown(3)}
         tint={effective === "vert" ? undefined : (effective === "rouge" ? "#F2DAD5" : "#F4E9D2")}
         right={<CircuitChip circuit={effective} />}>
+        <Controls checks={decl.checks} locale={locale} />
         <PredictionCard prediction={decl.prediction} predicted={predicted} locale={locale} />
 
         {decl.undervaluation && <StakeCallout u={decl.undervaluation} locale={locale} />}
@@ -428,6 +445,47 @@ function StakeStat({ label, value, sub }) {
         <Mono style={{ fontSize: 13.5, fontWeight: 600 }}>{value}</Mono>
         <span style={{ fontSize: 11, color: "#8A4034" }}> MAD</span>
         {sub ? <span style={{ fontSize: 11, fontWeight: 600, marginInlineStart: 6, color: "#7A2E22" }}>{sub}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+/* ----------- pre-flight input controls (arithmetic, docs, HS…) ---------- */
+function Controls({ checks, locale }) {
+  const anomalies = (checks && checks.anomalies) || [];
+  if (anomalies.length === 0) {
+    return (
+      <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "#2F5A43", background: "#DCE5DD", border: `1px solid ${C.border}`, borderRadius: 7, padding: "9px 12px", marginBottom: 10 }}>
+        <span style={{ marginTop: 1 }}>✓</span>
+        <span style={{ lineHeight: 1.45 }} dir={locale === "ar" ? "rtl" : "ltr"}>{t(locale, "d_controls_ok")}</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ border: "1px solid #E0B3A8", background: "#FBF1EE", borderRadius: 8, padding: "12px 14px", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 9, flexWrap: "wrap", marginBottom: 9 }}>
+        <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: "#7A2E22" }}>{t(locale, "d_sec_controls")}</span>
+        <span style={{ fontSize: 11, color: "#8A4034" }}>{t(locale, "d_controls_sub")}</span>
+        <span style={{ marginInlineStart: "auto", fontSize: 11, fontWeight: 600, color: "#7A2E22", background: "#F2DAD5", borderRadius: 5, padding: "2px 8px" }}>{anomalies.length}</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {anomalies.map((a, i) => {
+          const st = SEV_STYLE[a.severity] || SEV_STYLE.low;
+          return (
+            <div key={i} style={{ background: C.paper, border: `1px solid ${C.border}`, borderRadius: 7, padding: "9px 12px" }}>
+              <div style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: C.ink2 }}>
+                <span style={{ fontSize: 10, fontWeight: 600, color: st.fg, background: st.bg, borderRadius: 5, padding: "2px 7px", whiteSpace: "nowrap", marginTop: 1 }}>{a.code}</span>
+                <span dir={dirOf(a.message)} style={{ lineHeight: 1.45 }}>{a.message}</span>
+              </div>
+              {a.fix && (
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 11.5, color: C.muted, marginTop: 5, paddingInlineStart: 2 }}>
+                  <span style={{ color: C.navy }}>→</span>
+                  <span dir={dirOf(a.fix)} style={{ lineHeight: 1.45 }}>{a.fix}</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
